@@ -18,6 +18,7 @@ public partial class MainWindow : Window
     private readonly IListImportedTablesUseCase _listImportedTables;
     private readonly IBrowseTableUseCase _browseTable;
     private readonly IFindDuplicatesUseCase _findDuplicates;
+    private readonly ICompareDatasetsUseCase _compareDatasets;
 
     private CsvImport? _selectedImport;
     private string? _adHocTableName;
@@ -28,7 +29,8 @@ public partial class MainWindow : Window
         IImportCsvUseCase importCsv,
         IListImportedTablesUseCase listImportedTables,
         IBrowseTableUseCase browseTable,
-        IFindDuplicatesUseCase findDuplicates)
+        IFindDuplicatesUseCase findDuplicates,
+        ICompareDatasetsUseCase compareDatasets)
     {
         _createWorkspace = createWorkspace;
         _openWorkspace = openWorkspace;
@@ -36,6 +38,7 @@ public partial class MainWindow : Window
         _listImportedTables = listImportedTables;
         _browseTable = browseTable;
         _findDuplicates = findDuplicates;
+        _compareDatasets = compareDatasets;
 
         InitializeComponent();
     }
@@ -131,10 +134,34 @@ public partial class MainWindow : Window
         }, "Duplikaty gotowe");
     }
 
+    private async void CompareTables_Click(object sender, RoutedEventArgs e)
+    {
+        if (_selectedImport is null ||
+            CompareTableComboBox.SelectedItem is not CsvImport rightImport ||
+            DuplicateColumnComboBox.SelectedItem is not string columnName)
+        {
+            return;
+        }
+
+        await RunUiActionAsync(async () =>
+        {
+            OperationResult result = await _compareDatasets.ExecuteAsync(new DatasetCompareRequest(
+                _selectedImport.TableName,
+                rightImport.TableName,
+                [columnName],
+                [columnName],
+                DatasetCompareMode.AllWithStatus));
+
+            _adHocTableName = result.ResultTableName;
+            await RefreshSelectedTableAsync();
+        }, "Porównanie gotowe");
+    }
+
     private async Task RefreshImportsAsync()
     {
         IReadOnlyList<CsvImport> imports = await _listImportedTables.ExecuteAsync();
         ImportsListBox.ItemsSource = imports;
+        CompareTableComboBox.ItemsSource = imports;
     }
 
     private void SelectImport(Guid importId)
@@ -167,7 +194,7 @@ public partial class MainWindow : Window
                 false,
                 FilterTextBox.Text.Trim()));
 
-            string title = _adHocTableName is null ? _selectedImport!.DisplayName : "Duplikaty";
+            string title = _adHocTableName is null ? _selectedImport!.DisplayName : "Wynik operacji";
             TableTitleText.Text = $"{title} ({page.TotalRows} wierszy)";
             DataGrid.ItemsSource = ToRows(page);
         }, "Tabela odświeżona");

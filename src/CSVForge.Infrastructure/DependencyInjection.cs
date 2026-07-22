@@ -20,6 +20,7 @@ public static class DependencyInjection
         services.AddSingleton<IDatasetComparer, SqliteDatasetComparer>();
         services.AddSingleton<IDatasetJoiner, SqliteDatasetJoiner>();
         services.AddSingleton<ITableExporter, SqliteTableExporter>();
+        services.AddSingleton<IOperationHistory, SqliteOperationHistory>();
 
         return services;
     }

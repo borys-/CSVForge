@@ -2,6 +2,7 @@ using System.Collections.ObjectModel;
 using System.IO;
 using CSVForge.Application.Abstractions;
 using CSVForge.Application.Export;
+using CSVForge.Application.Operations;
 using CSVForge.Application.Tables;
 using CSVForge.Domain.Imports;
 using CSVForge.Domain.Operations;
@@ -24,6 +25,7 @@ public partial class MainWindow : Window
     private readonly ICompareDatasetsUseCase _compareDatasets;
     private readonly IJoinDatasetsUseCase _joinDatasets;
     private readonly IExportTableUseCase _exportTable;
+    private readonly IListOperationsUseCase _listOperations;
 
     private CsvImport? _selectedImport;
     private string? _adHocTableName;
@@ -40,7 +42,8 @@ public partial class MainWindow : Window
         IFindDuplicatesUseCase findDuplicates,
         ICompareDatasetsUseCase compareDatasets,
         IJoinDatasetsUseCase joinDatasets,
-        IExportTableUseCase exportTable)
+        IExportTableUseCase exportTable,
+        IListOperationsUseCase listOperations)
     {
         _createWorkspace = createWorkspace;
         _openWorkspace = openWorkspace;
@@ -51,6 +54,7 @@ public partial class MainWindow : Window
         _compareDatasets = compareDatasets;
         _joinDatasets = joinDatasets;
         _exportTable = exportTable;
+        _listOperations = listOperations;
 
         InitializeComponent();
     }
@@ -77,6 +81,7 @@ public partial class MainWindow : Window
 
             WorkspaceStatusText.Text = path;
             await RefreshImportsAsync();
+            await RefreshOperationsAsync();
         }, "Workspace gotowy");
     }
 
@@ -164,6 +169,7 @@ public partial class MainWindow : Window
             _adHocTableName = result.ResultTableName;
             _pageOffset = 0;
             await RefreshSelectedTableAsync();
+            await RefreshOperationsAsync();
         }, "Duplikaty gotowe");
     }
 
@@ -188,6 +194,7 @@ public partial class MainWindow : Window
             _adHocTableName = result.ResultTableName;
             _pageOffset = 0;
             await RefreshSelectedTableAsync();
+            await RefreshOperationsAsync();
         }, "Porównanie gotowe");
     }
 
@@ -220,6 +227,7 @@ public partial class MainWindow : Window
             _adHocTableName = result.ResultTableName;
             _pageOffset = 0;
             await RefreshSelectedTableAsync();
+            await RefreshOperationsAsync();
         }, "Połączenie gotowe");
     }
 
@@ -262,6 +270,23 @@ public partial class MainWindow : Window
         IReadOnlyList<CsvImport> imports = await _listImportedTables.ExecuteAsync();
         ImportsListBox.ItemsSource = imports;
         CompareTableComboBox.ItemsSource = imports;
+    }
+
+    private async Task RefreshOperationsAsync()
+    {
+        OperationsListBox.ItemsSource = await _listOperations.ExecuteAsync();
+    }
+
+    private async void OperationsListBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (OperationsListBox.SelectedItem is not WorkspaceOperation { ResultTableName: not null } operation)
+        {
+            return;
+        }
+
+        _adHocTableName = operation.ResultTableName;
+        _pageOffset = 0;
+        await RefreshSelectedTableAsync();
     }
 
     private void SelectImport(Guid importId)

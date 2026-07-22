@@ -6,6 +6,7 @@ using CSVForge.Infrastructure.Sqlite;
 using CsvHelper;
 using CsvHelper.Configuration;
 using Microsoft.Data.Sqlite;
+using SQLitePCL;
 
 namespace CSVForge.Infrastructure.Csv;
 
@@ -101,35 +102,34 @@ internal sealed class CsvImporterService(IWorkspaceContext workspaceContext) : I
         await CreateImportTableAsync(connection, tableName, columnNames, mappings, cancellationToken);
 
         long rowCount = 0;
-        List<object?[]> batch = [];
         List<ImportError> errors = [];
-        if (!hasHeader)
+        await using SqliteTransaction transaction = (SqliteTransaction)await connection.BeginTransactionAsync(cancellationToken);
+        using RawRowWriter writer = new(connection, tableName, columnNames, mappings);
+
+        if (!hasHeader && TryWriteRecord(firstRecord, csv.Parser.Row, csv.Parser.RawRecord, sourceHeaders.Count, mappings, writer, errors))
         {
-            AddRecord(firstRecord, csv.Parser.Row, csv.Parser.RawRecord, sourceHeaders.Count, mappings, batch, errors);
+            rowCount++;
         }
-        if (secondRecord is not null)
+        if (secondRecord is not null && TryWriteRecord(secondRecord, csv.Parser.Row, csv.Parser.RawRecord, sourceHeaders.Count, mappings, writer, errors))
         {
-            AddRecord(secondRecord, csv.Parser.Row, csv.Parser.RawRecord, sourceHeaders.Count, mappings, batch, errors);
+            rowCount++;
         }
 
         while (await csv.ReadAsync())
         {
             cancellationToken.ThrowIfCancellationRequested();
             string[] record = CsvHeaderDetector.TrimTrailingEmptyColumns(csv.Parser.Record ?? [], trailingEmptyColumns);
-            AddRecord(record, csv.Parser.Row, csv.Parser.RawRecord, sourceHeaders.Count, mappings, batch, errors);
-
-            if (batch.Count >= request.BatchSize)
+            if (TryWriteRecord(record, csv.Parser.Row, csv.Parser.RawRecord, sourceHeaders.Count, mappings, writer, errors))
             {
-                rowCount += await InsertBatchAsync(connection, tableName, columnNames, batch, cancellationToken);
-                batch.Clear();
-                progress?.Report(new ImportProgress(rowCount, null, "Importing rows"));
+                rowCount++;
+                if (rowCount % request.BatchSize == 0)
+                {
+                    progress?.Report(new ImportProgress(rowCount, null, "Importing rows"));
+                }
             }
         }
 
-        if (batch.Count > 0)
-        {
-            rowCount += await InsertBatchAsync(connection, tableName, columnNames, batch, cancellationToken);
-        }
+        await transaction.CommitAsync(cancellationToken);
 
         DateTimeOffset importedAt = DateTimeOffset.UtcNow;
         CsvImport import = new(
@@ -172,30 +172,17 @@ internal sealed class CsvImporterService(IWorkspaceContext workspaceContext) : I
         await command.ExecuteNonQueryAsync(cancellationToken);
     }
 
-    private static async Task<long> InsertBatchAsync(SqliteConnection connection, string tableName, IReadOnlyList<string> columnNames, IReadOnlyList<object?[]> rows, CancellationToken cancellationToken)
+    private static int BindValue(sqlite3_stmt statement, int index, object? value)
     {
-        await using SqliteTransaction transaction = (SqliteTransaction)await connection.BeginTransactionAsync(cancellationToken);
-        await using SqliteCommand command = connection.CreateCommand();
-        command.Transaction = transaction;
-        command.CommandText = BuildInsertSql(tableName, columnNames);
-        for (int i = 0; i < columnNames.Count; i++)
+        return value switch
         {
-            command.Parameters.Add(new SqliteParameter($"$p{i}", DBNull.Value));
-        }
-        command.Prepare();
-
-        foreach (object?[] row in rows)
-        {
-            for (int i = 0; i < columnNames.Count; i++)
-            {
-                command.Parameters[i].Value = row[i] ?? DBNull.Value;
-            }
-
-            await command.ExecuteNonQueryAsync(cancellationToken);
-        }
-
-        await transaction.CommitAsync(cancellationToken);
-        return rows.Count;
+            null or DBNull => raw.sqlite3_bind_null(statement, index),
+            long integer => raw.sqlite3_bind_int64(statement, index, integer),
+            int integer => raw.sqlite3_bind_int64(statement, index, integer),
+            double number => raw.sqlite3_bind_double(statement, index, number),
+            float number => raw.sqlite3_bind_double(statement, index, number),
+            _ => raw.sqlite3_bind_text(statement, index, Convert.ToString(value, CultureInfo.InvariantCulture) ?? string.Empty)
+        };
     }
 
     private static IReadOnlyList<CsvColumnMapping> ResolveMappings(
@@ -222,28 +209,66 @@ internal sealed class CsvImporterService(IWorkspaceContext workspaceContext) : I
         return mappings;
     }
 
-    private static void AddRecord(
+    private static bool TryWriteRecord(
         string[] record,
         long rowNumber,
         string? rawRecord,
         int sourceColumnCount,
         IReadOnlyList<CsvColumnMapping> mappings,
-        ICollection<object?[]> rows,
+        RawRowWriter writer,
         ICollection<ImportError> errors)
     {
         if (record.Length != sourceColumnCount)
         {
             errors.Add(new ImportError(rowNumber, $"Expected {sourceColumnCount} fields, found {record.Length}.", rawRecord));
-            return;
+            return false;
         }
 
         try
         {
-            rows.Add(mappings.Select(mapping => ConvertValue(record[mapping.SourceIndex], mapping.DataType)).ToArray());
+            writer.Write(record);
+            return true;
         }
         catch (FormatException ex)
         {
             errors.Add(new ImportError(rowNumber, ex.Message, rawRecord));
+            return false;
+        }
+    }
+
+    private sealed class RawRowWriter : IDisposable
+    {
+        private readonly sqlite3_stmt statement;
+        private readonly IReadOnlyList<CsvColumnMapping> mappings;
+
+        public RawRowWriter(SqliteConnection connection, string tableName, IReadOnlyList<string> columnNames, IReadOnlyList<CsvColumnMapping> mappings)
+        {
+            this.mappings = mappings;
+            int result = raw.sqlite3_prepare_v2(connection.Handle, BuildInsertSql(tableName, columnNames), out statement);
+            Ensure(result, "prepare the import statement");
+        }
+
+        public void Write(string[] record)
+        {
+            for (int i = 0; i < mappings.Count; i++)
+            {
+                CsvColumnMapping mapping = mappings[i];
+                Ensure(BindValue(statement, i + 1, ConvertValue(record[mapping.SourceIndex], mapping.DataType)), "bind an imported value");
+            }
+
+            int stepResult = raw.sqlite3_step(statement);
+            Ensure(stepResult == raw.SQLITE_DONE ? raw.SQLITE_OK : stepResult, "write an imported row");
+            Ensure(raw.sqlite3_reset(statement), "reset the import statement");
+        }
+
+        public void Dispose() => raw.sqlite3_finalize(statement);
+
+        private static void Ensure(int result, string operation)
+        {
+            if (result != raw.SQLITE_OK)
+            {
+                throw new InvalidOperationException($"SQLite could not {operation} (error {result}).");
+            }
         }
     }
 

@@ -110,6 +110,10 @@
                             <TextBlock x:Name="PageStatusText" Grid.Column="2" HorizontalAlignment="Right" VerticalAlignment="Center" Text="Brak danych" />
                         </Grid>
                         <Grid DockPanel.Dock="Top" Margin="0,0,0,10">
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto" />
+                                <RowDefinition Height="Auto" />
+                            </Grid.RowDefinitions>
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="*" />
                                 <ColumnDefinition Width="170" />
@@ -122,12 +126,32 @@
                             </Grid.ColumnDefinitions>
                             <TextBlock x:Name="TableTitleText" Text="Dane" FontSize="16" FontWeight="SemiBold" VerticalAlignment="Center" />
                             <TextBox x:Name="FilterTextBox" Grid.Column="1" Height="30" Margin="8,0" VerticalContentAlignment="Center" />
-                            <ComboBox x:Name="DuplicateColumnComboBox" Grid.Column="2" Height="30" Margin="0,0,8,0" />
+                            <ComboBox x:Name="DuplicateColumnComboBox" Grid.Column="2" Height="30" Margin="0,0,8,0" IsEditable="True" />
                             <ComboBox x:Name="CompareTableComboBox" Grid.Column="3" Height="30" Margin="0,0,8,0" DisplayMemberPath="DisplayName" />
                             <Button Grid.Column="4" Content="Duplikaty" Height="30" MinWidth="88" Margin="0,0,8,0" Padding="12,0" Click="FindDuplicates_Click" />
                             <Button Grid.Column="5" Content="Porównaj" Height="30" MinWidth="86" Margin="0,0,8,0" Padding="12,0" Click="CompareTables_Click" />
                             <Button Grid.Column="6" Content="Połącz" Height="30" MinWidth="76" Margin="0,0,8,0" Padding="12,0" Click="JoinTables_Click" />
                             <Button Grid.Column="7" Content="Filtruj" Height="30" MinWidth="78" Padding="12,0" Click="RefreshTable_Click" />
+                            <StackPanel Grid.Row="1" Grid.ColumnSpan="8" Orientation="Horizontal" Margin="0,8,0,0">
+                                <TextBlock Text="Duplikaty:" VerticalAlignment="Center" />
+                                <ComboBox x:Name="DuplicateModeComboBox" Width="150" Height="28" Margin="6,0,16,0" SelectedIndex="0">
+                                    <ComboBoxItem Content="Wszystkie wiersze" Tag="AllDuplicateRows" />
+                                    <ComboBoxItem Content="Podsumowanie" Tag="Summary" />
+                                </ComboBox>
+                                <TextBlock Text="Porównanie:" VerticalAlignment="Center" />
+                                <ComboBox x:Name="CompareModeComboBox" Width="140" Height="28" Margin="6,0,16,0" SelectedIndex="0">
+                                    <ComboBoxItem Content="Wszystko ze statusem" Tag="AllWithStatus" />
+                                    <ComboBoxItem Content="Wspólne" Tag="CommonRows" />
+                                    <ComboBoxItem Content="Tylko lewa" Tag="LeftOnly" />
+                                    <ComboBoxItem Content="Tylko prawa" Tag="RightOnly" />
+                                </ComboBox>
+                                <TextBlock Text="Join:" VerticalAlignment="Center" />
+                                <ComboBox x:Name="JoinTypeComboBox" Width="100" Height="28" Margin="6,0,0,0" SelectedIndex="0">
+                                    <ComboBoxItem Content="LEFT" Tag="Left" />
+                                    <ComboBoxItem Content="INNER" Tag="Inner" />
+                                    <ComboBoxItem Content="RIGHT" Tag="Right" />
+                                </ComboBox>
+                            </StackPanel>
                         </Grid>
                         <DataGrid x:Name="DataGrid"
                                   AutoGenerateColumns="True"

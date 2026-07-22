@@ -193,7 +193,8 @@ public partial class MainWindow : Window
 
     private async void FindDuplicates_Click(object sender, RoutedEventArgs e)
     {
-        if (_selectedImport is null || DuplicateColumnComboBox.SelectedItem is not string columnName)
+        IReadOnlyList<string> keyColumns = SelectedKeyColumns();
+        if (_selectedImport is null || keyColumns.Count == 0)
         {
             return;
         }
@@ -202,8 +203,8 @@ public partial class MainWindow : Window
         {
             OperationResult result = await _findDuplicates.ExecuteAsync(new DuplicateSearchRequest(
                 _selectedImport.TableName,
-                [columnName],
-                DuplicateSearchMode.AllDuplicateRows,
+                keyColumns,
+                SelectedEnum(DuplicateModeComboBox, DuplicateSearchMode.AllDuplicateRows),
                 true));
 
             _adHocTableName = result.ResultTableName;
@@ -217,7 +218,7 @@ public partial class MainWindow : Window
     {
         if (_selectedImport is null ||
             CompareTableComboBox.SelectedItem is not CsvImport rightImport ||
-            DuplicateColumnComboBox.SelectedItem is not string columnName)
+            SelectedKeyColumns() is not { Count: > 0 } keyColumns)
         {
             return;
         }
@@ -227,9 +228,9 @@ public partial class MainWindow : Window
             OperationResult result = await _compareDatasets.ExecuteAsync(new DatasetCompareRequest(
                 _selectedImport.TableName,
                 rightImport.TableName,
-                [columnName],
-                [columnName],
-                DatasetCompareMode.AllWithStatus));
+                keyColumns,
+                keyColumns,
+                SelectedEnum(CompareModeComboBox, DatasetCompareMode.AllWithStatus)));
 
             _adHocTableName = result.ResultTableName;
             _pageOffset = 0;
@@ -242,14 +243,15 @@ public partial class MainWindow : Window
     {
         if (_selectedImport is null ||
             CompareTableComboBox.SelectedItem is not CsvImport rightImport ||
-            DuplicateColumnComboBox.SelectedItem is not string columnName)
+            SelectedKeyColumns() is not { Count: > 0 } keyColumns)
         {
             return;
         }
 
-        if (rightImport.Columns.All(column => !string.Equals(column.Name, columnName, StringComparison.OrdinalIgnoreCase)))
+        string? missingColumn = keyColumns.FirstOrDefault(key => rightImport.Columns.All(column => !string.Equals(column.Name, key, StringComparison.OrdinalIgnoreCase)));
+        if (missingColumn is not null)
         {
-            MessageBox.Show(this, $"Tabela po prawej stronie nie ma kolumny '{columnName}'.", "CSVForge", MessageBoxButton.OK, MessageBoxImage.Information);
+            MessageBox.Show(this, $"Tabela po prawej stronie nie ma kolumny '{missingColumn}'.", "CSVForge", MessageBoxButton.OK, MessageBoxImage.Information);
             return;
         }
 
@@ -258,11 +260,11 @@ public partial class MainWindow : Window
             OperationResult result = await _joinDatasets.ExecuteAsync(new DatasetJoinRequest(
                 _selectedImport.TableName,
                 rightImport.TableName,
-                [columnName],
-                [columnName],
+                keyColumns,
+                keyColumns,
                 _selectedImport.Columns.Select(column => column.Name).ToArray(),
                 rightImport.Columns.Select(column => column.Name).ToArray(),
-                DatasetJoinType.Left));
+                SelectedEnum(JoinTypeComboBox, DatasetJoinType.Left)));
 
             _adHocTableName = result.ResultTableName;
             _pageOffset = 0;
@@ -446,6 +448,18 @@ public partial class MainWindow : Window
         }
 
         return rows;
+    }
+
+    private IReadOnlyList<string> SelectedKeyColumns()
+    {
+        return DuplicateColumnComboBox.Text.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+    }
+
+    private static T SelectedEnum<T>(ComboBox comboBox, T fallback) where T : struct, Enum
+    {
+        return comboBox.SelectedItem is ComboBoxItem { Tag: string value } && Enum.TryParse(value, true, out T parsed)
+            ? parsed
+            : fallback;
     }
 
     private async Task RunUiActionAsync(Func<Task> action, string successMessage)

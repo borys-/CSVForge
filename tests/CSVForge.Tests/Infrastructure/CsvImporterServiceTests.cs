@@ -131,6 +131,26 @@ public sealed class CsvImporterServiceTests
         Assert.Equal("Łódź", (string?)await command.ExecuteScalarAsync());
     }
 
+    [Fact]
+    public async Task ImportCsvUseCase_UsesConfiguredBatchSizeAndReportsProgress()
+    {
+        string directory = Path.Combine(Path.GetTempPath(), "CSVForge.Tests", Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(directory);
+        string csvPath = Path.Combine(directory, "data.csv");
+        await File.WriteAllTextAsync(csvPath, "Id\r\n1\r\n2\r\n3\r\n4\r\n5\r\n");
+        ServiceProvider provider = new ServiceCollection().AddApplication().AddInfrastructure().BuildServiceProvider();
+        await provider.GetRequiredService<ICreateWorkspaceUseCase>().ExecuteAsync(Path.Combine(directory, "workspace.db"));
+        List<ImportProgress> reports = [];
+        InlineProgress progress = new(reports.Add);
+
+        ImportResult result = await provider.GetRequiredService<IImportCsvUseCase>()
+            .ExecuteAsync(new ImportRequest(csvPath, "Data", true, null, null, 2), progress);
+
+        Assert.Equal(5, result.Import.RowCount);
+        Assert.Contains(reports, item => item.ProcessedRows == 2);
+        Assert.Contains(reports, item => item.ProcessedRows == 4);
+    }
+
     private sealed class CancelOnProgress(CancellationTokenSource cancellation) : IProgress<ImportProgress>
     {
         public void Report(ImportProgress value)
@@ -140,5 +160,10 @@ public sealed class CsvImporterServiceTests
                 cancellation.Cancel();
             }
         }
+    }
+
+    private sealed class InlineProgress(Action<ImportProgress> report) : IProgress<ImportProgress>
+    {
+        public void Report(ImportProgress value) => report(value);
     }
 }

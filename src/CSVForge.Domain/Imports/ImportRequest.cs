@@ -5,4 +5,5 @@ public sealed record ImportRequest(
     string DisplayName,
     bool HasHeader,
     char? Delimiter,
-    string? EncodingName);
+    string? EncodingName,
+    int BatchSize = 500);

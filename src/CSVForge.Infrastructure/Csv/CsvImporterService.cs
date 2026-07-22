@@ -11,8 +11,6 @@ namespace CSVForge.Infrastructure.Csv;
 
 internal sealed class CsvImporterService(IWorkspaceContext workspaceContext) : ICsvImporter
 {
-    private const int BatchSize = 500;
-
     public async Task<ImportResult> ImportAsync(ImportRequest request, IProgress<ImportProgress>? progress, CancellationToken cancellationToken)
     {
         if (workspaceContext.CurrentWorkspacePath is null)
@@ -23,6 +21,10 @@ internal sealed class CsvImporterService(IWorkspaceContext workspaceContext) : I
         if (!File.Exists(request.FilePath))
         {
             throw new FileNotFoundException("CSV file does not exist.", request.FilePath);
+        }
+        if (request.BatchSize <= 0 || request.BatchSize > 100_000)
+        {
+            throw new ArgumentOutOfRangeException(nameof(request), "Batch size must be between 1 and 100000.");
         }
 
         Encoding encoding = await CsvEncodingHelper.ResolveAsync(request, cancellationToken);
@@ -94,7 +96,7 @@ internal sealed class CsvImporterService(IWorkspaceContext workspaceContext) : I
 
             batch.Add(record);
 
-            if (batch.Count >= BatchSize)
+            if (batch.Count >= request.BatchSize)
             {
                 rowCount += await InsertBatchAsync(connection, tableName, columnNames, batch, cancellationToken);
                 batch.Clear();

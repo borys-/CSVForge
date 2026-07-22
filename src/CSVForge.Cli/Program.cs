@@ -64,7 +64,7 @@ static async Task<int> RunAsync(IServiceProvider services, string[] args)
             string file = Required(options, "file");
             string name = options.GetValueOrDefault("name") ?? Path.GetFileNameWithoutExtension(file);
             ImportResult result = await services.GetRequiredService<IImportCsvUseCase>()
-                .ExecuteAsync(new ImportRequest(file, name, !options.ContainsKey("no-header"), Delimiter(options), options.GetValueOrDefault("encoding")));
+                .ExecuteAsync(new ImportRequest(file, name, !options.ContainsKey("no-header"), Delimiter(options), options.GetValueOrDefault("encoding"), IntOption(options, "batch-size", 500)));
             Console.WriteLine($"Zaimportowano {result.Import.RowCount} wierszy do {result.Import.TableName}.");
             return 0;
         }
@@ -172,6 +172,11 @@ static T EnumOption<T>(IReadOnlyDictionary<string, string> options, string name,
         ? parsed
         : options.ContainsKey(name) ? throw new ArgumentException($"Nieprawidłowa wartość --{name}.") : fallback;
 
+static int IntOption(IReadOnlyDictionary<string, string> options, string name, int fallback) =>
+    options.TryGetValue(name, out string? value) && int.TryParse(value, out int parsed)
+        ? parsed
+        : options.ContainsKey(name) ? throw new ArgumentException($"Nieprawidłowa wartość --{name}.") : fallback;
+
 static char? Delimiter(IReadOnlyDictionary<string, string> options)
 {
     if (!options.TryGetValue("delimiter", out string? value))
@@ -198,7 +203,7 @@ static void PrintHelp()
         CSVForge CLI
 
         workspace --action create|open --path <workspace.db>
-        import --workspace <db> --file <plik.csv> [--name <nazwa>] [--delimiter ;] [--no-header]
+        import --workspace <db> --file <plik.csv> [--name <nazwa>] [--delimiter ;] [--batch-size 500] [--no-header]
         list-tables --workspace <db>
         duplicates --workspace <db> --table <tabela> --columns <kol1,kol2> [--mode Summary|AllDuplicateRows]
         compare --workspace <db> --left <tabela> --right <tabela> --left-keys <kolumny> --right-keys <kolumny> [--mode AllWithStatus]

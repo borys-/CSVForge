@@ -18,6 +18,7 @@ public static class DependencyInjection
         services.AddSingleton<ITableBrowser, SqliteTableBrowser>();
         services.AddSingleton<IDuplicateFinder, SqliteDuplicateFinder>();
         services.AddSingleton<IDatasetComparer, SqliteDatasetComparer>();
+        services.AddSingleton<IDatasetJoiner, SqliteDatasetJoiner>();
 
         return services;
     }

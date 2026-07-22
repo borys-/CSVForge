@@ -19,6 +19,7 @@ public partial class MainWindow : Window
     private readonly IBrowseTableUseCase _browseTable;
     private readonly IFindDuplicatesUseCase _findDuplicates;
     private readonly ICompareDatasetsUseCase _compareDatasets;
+    private readonly IJoinDatasetsUseCase _joinDatasets;
 
     private CsvImport? _selectedImport;
     private string? _adHocTableName;
@@ -30,7 +31,8 @@ public partial class MainWindow : Window
         IListImportedTablesUseCase listImportedTables,
         IBrowseTableUseCase browseTable,
         IFindDuplicatesUseCase findDuplicates,
-        ICompareDatasetsUseCase compareDatasets)
+        ICompareDatasetsUseCase compareDatasets,
+        IJoinDatasetsUseCase joinDatasets)
     {
         _createWorkspace = createWorkspace;
         _openWorkspace = openWorkspace;
@@ -39,6 +41,7 @@ public partial class MainWindow : Window
         _browseTable = browseTable;
         _findDuplicates = findDuplicates;
         _compareDatasets = compareDatasets;
+        _joinDatasets = joinDatasets;
 
         InitializeComponent();
     }
@@ -155,6 +158,37 @@ public partial class MainWindow : Window
             _adHocTableName = result.ResultTableName;
             await RefreshSelectedTableAsync();
         }, "Porównanie gotowe");
+    }
+
+    private async void JoinTables_Click(object sender, RoutedEventArgs e)
+    {
+        if (_selectedImport is null ||
+            CompareTableComboBox.SelectedItem is not CsvImport rightImport ||
+            DuplicateColumnComboBox.SelectedItem is not string columnName)
+        {
+            return;
+        }
+
+        if (rightImport.Columns.All(column => !string.Equals(column.Name, columnName, StringComparison.OrdinalIgnoreCase)))
+        {
+            MessageBox.Show(this, $"Tabela po prawej stronie nie ma kolumny '{columnName}'.", "CSVForge", MessageBoxButton.OK, MessageBoxImage.Information);
+            return;
+        }
+
+        await RunUiActionAsync(async () =>
+        {
+            OperationResult result = await _joinDatasets.ExecuteAsync(new DatasetJoinRequest(
+                _selectedImport.TableName,
+                rightImport.TableName,
+                [columnName],
+                [columnName],
+                _selectedImport.Columns.Select(column => column.Name).ToArray(),
+                rightImport.Columns.Select(column => column.Name).ToArray(),
+                DatasetJoinType.Left));
+
+            _adHocTableName = result.ResultTableName;
+            await RefreshSelectedTableAsync();
+        }, "Połączenie gotowe");
     }
 
     private async Task RefreshImportsAsync()

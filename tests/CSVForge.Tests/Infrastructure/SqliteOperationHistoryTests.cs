@@ -1,6 +1,7 @@
 using CSVForge.Application;
 using CSVForge.Application.Abstractions;
 using CSVForge.Application.Operations;
+using CSVForge.Application.Tables;
 using CSVForge.Domain.Imports;
 using CSVForge.Domain.Operations;
 using CSVForge.Infrastructure;
@@ -28,5 +29,27 @@ public sealed class SqliteOperationHistoryTests
         WorkspaceOperation operation = Assert.Single(await provider.GetRequiredService<IListOperationsUseCase>().ExecuteAsync());
         Assert.Equal("duplicates", operation.OperationType);
         Assert.Equal(result.ResultTableName, operation.ResultTableName);
+    }
+
+    [Fact]
+    public async Task DeleteOperationUseCase_RemovesHistoryAndResultTable()
+    {
+        string directory = Path.Combine(Path.GetTempPath(), "CSVForge.Tests", Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(directory);
+        string csvPath = Path.Combine(directory, "data.csv");
+        await File.WriteAllTextAsync(csvPath, "Id\r\n1\r\n1\r\n");
+        ServiceProvider provider = new ServiceCollection().AddApplication().AddInfrastructure().BuildServiceProvider();
+        await provider.GetRequiredService<ICreateWorkspaceUseCase>().ExecuteAsync(Path.Combine(directory, "workspace.db"));
+        ImportResult import = await provider.GetRequiredService<IImportCsvUseCase>()
+            .ExecuteAsync(new ImportRequest(csvPath, "Data", true, null, null));
+        await provider.GetRequiredService<IFindDuplicatesUseCase>()
+            .ExecuteAsync(new DuplicateSearchRequest(import.Import.TableName, ["Id"], DuplicateSearchMode.Summary, false));
+        WorkspaceOperation operation = Assert.Single(await provider.GetRequiredService<IListOperationsUseCase>().ExecuteAsync());
+
+        await provider.GetRequiredService<IDeleteOperationUseCase>().ExecuteAsync(operation.Id);
+
+        Assert.Empty(await provider.GetRequiredService<IListOperationsUseCase>().ExecuteAsync());
+        await Assert.ThrowsAsync<InvalidOperationException>(() => provider.GetRequiredService<IBrowseTableUseCase>()
+            .ExecuteAsync(new BrowseTableRequest(operation.ResultTableName!, 10, 0, null, false, null)));
     }
 }

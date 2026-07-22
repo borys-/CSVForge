@@ -33,6 +33,7 @@ public partial class MainWindow : Window
     private readonly IListOperationsUseCase _listOperations;
     private readonly IDeleteImportUseCase _deleteImport;
     private readonly IRenameImportUseCase _renameImport;
+    private readonly IDeleteOperationUseCase _deleteOperation;
 
     private CsvImport? _selectedImport;
     private string? _adHocTableName;
@@ -53,7 +54,8 @@ public partial class MainWindow : Window
         IExportTableUseCase exportTable,
         IListOperationsUseCase listOperations,
         IDeleteImportUseCase deleteImport,
-        IRenameImportUseCase renameImport)
+        IRenameImportUseCase renameImport,
+        IDeleteOperationUseCase deleteOperation)
     {
         _createWorkspace = createWorkspace;
         _openWorkspace = openWorkspace;
@@ -68,6 +70,7 @@ public partial class MainWindow : Window
         _listOperations = listOperations;
         _deleteImport = deleteImport;
         _renameImport = renameImport;
+        _deleteOperation = deleteOperation;
 
         InitializeComponent();
         LoadRecentWorkspaces();
@@ -324,6 +327,29 @@ public partial class MainWindow : Window
         _adHocTableName = operation.ResultTableName;
         _pageOffset = 0;
         await RefreshSelectedTableAsync();
+    }
+
+    private async void DeleteOperation_Click(object sender, RoutedEventArgs e)
+    {
+        if (OperationsListBox.SelectedItem is not WorkspaceOperation operation)
+        {
+            return;
+        }
+        if (MessageBox.Show(this, "Usunąć wynik tej operacji?", "CSVForge", MessageBoxButton.YesNo, MessageBoxImage.Warning) != MessageBoxResult.Yes)
+        {
+            return;
+        }
+
+        await RunUiActionAsync(async cancellationToken =>
+        {
+            await _deleteOperation.ExecuteAsync(operation.Id, cancellationToken);
+            if (string.Equals(_adHocTableName, operation.ResultTableName, StringComparison.OrdinalIgnoreCase))
+            {
+                _adHocTableName = null;
+                DataGrid.ItemsSource = null;
+            }
+            await RefreshOperationsAsync();
+        }, "Wynik usunięty");
     }
 
     private async void DeleteImport_Click(object sender, RoutedEventArgs e)

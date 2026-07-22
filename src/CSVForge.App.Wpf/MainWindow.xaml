@@ -76,7 +76,10 @@
                             <Button Grid.Row="1" Grid.Column="1" Content="Zmień nazwę" Height="28" Margin="0,8,0,0" Padding="10,0" Click="RenameImport_Click" />
                         </Grid>
                         <GroupBox DockPanel.Dock="Bottom" Header="Historia operacji" Margin="0,10,0,0" Height="150">
-                            <ListBox x:Name="OperationsListBox" DisplayMemberPath="DisplayName" SelectionChanged="OperationsListBox_SelectionChanged" />
+                            <DockPanel>
+                                <Button DockPanel.Dock="Bottom" Content="Usuń wynik" Height="28" Margin="0,6,0,0" Click="DeleteOperation_Click" />
+                                <ListBox x:Name="OperationsListBox" DisplayMemberPath="DisplayName" SelectionChanged="OperationsListBox_SelectionChanged" />
+                            </DockPanel>
                         </GroupBox>
                         <Grid DockPanel.Dock="Bottom" Margin="0,10,0,0">
                             <Grid.ColumnDefinitions>

@@ -25,10 +25,7 @@ internal sealed class CsvImporterService(IWorkspaceContext workspaceContext) : I
             throw new FileNotFoundException("CSV file does not exist.", request.FilePath);
         }
 
-        Encoding.RegisterProvider(CodePagesEncodingProvider.Instance);
-        Encoding encoding = string.IsNullOrWhiteSpace(request.EncodingName)
-            ? new UTF8Encoding(encoderShouldEmitUTF8Identifier: false, throwOnInvalidBytes: true)
-            : Encoding.GetEncoding(request.EncodingName);
+        Encoding encoding = await CsvEncodingHelper.ResolveAsync(request, cancellationToken);
 
         char delimiter = request.Delimiter ?? await CsvImportNameHelper.DetectDelimiterAsync(request.FilePath, encoding, cancellationToken);
 

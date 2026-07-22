@@ -17,9 +17,7 @@ internal sealed class CsvReaderService : ICsvReader
             throw new FileNotFoundException("CSV file does not exist.", request.FilePath);
         }
 
-        Encoding.RegisterProvider(CodePagesEncodingProvider.Instance);
-
-        Encoding encoding = ResolveEncoding(request);
+        Encoding encoding = await CsvEncodingHelper.ResolveAsync(request, cancellationToken);
         char delimiter = request.Delimiter ?? await CsvImportNameHelper.DetectDelimiterAsync(request.FilePath, encoding, cancellationToken);
 
         await using FileStream stream = File.OpenRead(request.FilePath);
@@ -70,16 +68,6 @@ internal sealed class CsvReaderService : ICsvReader
             BadDataFound = null,
             MissingFieldFound = null
         };
-    }
-
-    private static Encoding ResolveEncoding(ImportRequest request)
-    {
-        if (string.IsNullOrWhiteSpace(request.EncodingName))
-        {
-            return new UTF8Encoding(encoderShouldEmitUTF8Identifier: false, throwOnInvalidBytes: true);
-        }
-
-        return Encoding.GetEncoding(request.EncodingName);
     }
 
     private static IReadOnlyList<CsvColumn> CreateColumns(IReadOnlyList<string> headers)

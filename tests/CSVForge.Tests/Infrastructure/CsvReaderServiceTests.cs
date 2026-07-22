@@ -50,6 +50,18 @@ public sealed class CsvReaderServiceTests
     }
 
     [Fact]
+    public async Task PreviewCsvUseCase_AutomaticallyDetectsWindows1250()
+    {
+        Encoding.RegisterProvider(CodePagesEncodingProvider.Instance);
+        string csvPath = await WriteTempFileAsync("Nazwa;Miasto\r\nŻółw;Łódź\r\n", Encoding.GetEncoding("windows-1250"));
+
+        CsvPreview preview = await CreatePreviewUseCase().ExecuteAsync(new ImportRequest(csvPath, "People", true, null, null));
+
+        Assert.Equal("Żółw", preview.Rows[0][0]);
+        Assert.Equal("Łódź", preview.Rows[0][1]);
+    }
+
+    [Fact]
     public async Task PreviewCsvUseCase_NormalizesDuplicateHeaders()
     {
         string csvPath = await WriteTempFileAsync("Order Id;Order Id;123\r\n1;2;3\r\n", Encoding.UTF8);

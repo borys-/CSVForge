@@ -1,3 +1,4 @@
+using System.Text;
 using CSVForge.Application;
 using CSVForge.Application.Abstractions;
 using CSVForge.Domain.Imports;
@@ -106,6 +107,28 @@ public sealed class CsvImporterServiceTests
         command.CommandText = "SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name LIKE 'import_%';";
         Assert.Equal(0L, (long)(await command.ExecuteScalarAsync() ?? 0L));
         Assert.Empty(await provider.GetRequiredService<IListImportedTablesUseCase>().ExecuteAsync());
+    }
+
+    [Fact]
+    public async Task ImportCsvUseCase_AutomaticallyImportsWindows1250PolishText()
+    {
+        Encoding.RegisterProvider(CodePagesEncodingProvider.Instance);
+        string directory = Path.Combine(Path.GetTempPath(), "CSVForge.Tests", Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(directory);
+        string workspacePath = Path.Combine(directory, "workspace.db");
+        string csvPath = Path.Combine(directory, "polish.csv");
+        await File.WriteAllTextAsync(csvPath, "Nazwa;Miasto\r\nŻółw;Łódź\r\n", Encoding.GetEncoding("windows-1250"));
+        ServiceProvider provider = new ServiceCollection().AddApplication().AddInfrastructure().BuildServiceProvider();
+        await provider.GetRequiredService<ICreateWorkspaceUseCase>().ExecuteAsync(workspacePath);
+
+        ImportResult result = await provider.GetRequiredService<IImportCsvUseCase>()
+            .ExecuteAsync(new ImportRequest(csvPath, "Polish", true, null, null));
+
+        await using SqliteConnection connection = new($"Data Source={workspacePath}");
+        await connection.OpenAsync();
+        await using SqliteCommand command = connection.CreateCommand();
+        command.CommandText = $"SELECT Miasto FROM \"{result.Import.TableName}\";";
+        Assert.Equal("Łódź", (string?)await command.ExecuteScalarAsync());
     }
 
     private sealed class CancelOnProgress(CancellationTokenSource cancellation) : IProgress<ImportProgress>

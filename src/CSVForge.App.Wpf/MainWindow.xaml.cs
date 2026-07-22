@@ -166,6 +166,7 @@ public partial class MainWindow : Window
         ImportNameTextBox.Text = _selectedImport?.DisplayName ?? string.Empty;
         DuplicateColumnComboBox.ItemsSource = _selectedImport?.Columns.Select(column => column.Name).ToArray();
         DuplicateColumnComboBox.SelectedIndex = DuplicateColumnComboBox.Items.Count > 0 ? 0 : -1;
+        LeftOutputColumnsTextBox.Text = _selectedImport is null ? string.Empty : string.Join(",", _selectedImport.Columns.Select(column => column.Name));
         await RefreshSelectedTableAsync();
     }
 
@@ -217,9 +218,11 @@ public partial class MainWindow : Window
 
     private async void CompareTables_Click(object sender, RoutedEventArgs e)
     {
+        IReadOnlyList<string> rightKeys = RightKeyColumns();
         if (_selectedImport is null ||
             CompareTableComboBox.SelectedItem is not CsvImport rightImport ||
-            SelectedKeyColumns() is not { Count: > 0 } keyColumns)
+            SelectedKeyColumns() is not { Count: > 0 } keyColumns ||
+            rightKeys.Count != keyColumns.Count)
         {
             return;
         }
@@ -229,7 +232,7 @@ public partial class MainWindow : Window
             OperationResult result = await _compareDatasets.ExecuteAsync(new DatasetCompareRequest(
                 _selectedImport.TableName,
                 rightImport.TableName,
-                keyColumns,
+                rightKeys,
                 keyColumns,
                 SelectedEnum(CompareModeComboBox, DatasetCompareMode.AllWithStatus)));
 
@@ -242,14 +245,16 @@ public partial class MainWindow : Window
 
     private async void JoinTables_Click(object sender, RoutedEventArgs e)
     {
+        IReadOnlyList<string> rightKeys = RightKeyColumns();
         if (_selectedImport is null ||
             CompareTableComboBox.SelectedItem is not CsvImport rightImport ||
-            SelectedKeyColumns() is not { Count: > 0 } keyColumns)
+            SelectedKeyColumns() is not { Count: > 0 } keyColumns ||
+            rightKeys.Count != keyColumns.Count)
         {
             return;
         }
 
-        string? missingColumn = keyColumns.FirstOrDefault(key => rightImport.Columns.All(column => !string.Equals(column.Name, key, StringComparison.OrdinalIgnoreCase)));
+        string? missingColumn = rightKeys.FirstOrDefault(key => rightImport.Columns.All(column => !string.Equals(column.Name, key, StringComparison.OrdinalIgnoreCase)));
         if (missingColumn is not null)
         {
             MessageBox.Show(this, $"Tabela po prawej stronie nie ma kolumny '{missingColumn}'.", "CSVForge", MessageBoxButton.OK, MessageBoxImage.Information);
@@ -262,9 +267,9 @@ public partial class MainWindow : Window
                 _selectedImport.TableName,
                 rightImport.TableName,
                 keyColumns,
-                keyColumns,
-                _selectedImport.Columns.Select(column => column.Name).ToArray(),
-                rightImport.Columns.Select(column => column.Name).ToArray(),
+                rightKeys,
+                ParseColumns(LeftOutputColumnsTextBox.Text),
+                ParseColumns(RightOutputColumnsTextBox.Text),
                 SelectedEnum(JoinTypeComboBox, DatasetJoinType.Left)));
 
             _adHocTableName = result.ResultTableName;
@@ -454,6 +459,28 @@ public partial class MainWindow : Window
     private IReadOnlyList<string> SelectedKeyColumns()
     {
         return DuplicateColumnComboBox.Text.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+    }
+
+    private IReadOnlyList<string> RightKeyColumns() => ParseColumns(RightKeyColumnsTextBox.Text);
+
+    private static IReadOnlyList<string> ParseColumns(string value) =>
+        value.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+
+    private void CompareTableComboBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (CompareTableComboBox.SelectedItem is not CsvImport import)
+        {
+            RightKeyColumnsTextBox.Text = string.Empty;
+            RightOutputColumnsTextBox.Text = string.Empty;
+            return;
+        }
+
+        string[] columns = import.Columns.Select(column => column.Name).ToArray();
+        RightOutputColumnsTextBox.Text = string.Join(",", columns);
+        IReadOnlyList<string> leftKeys = SelectedKeyColumns();
+        RightKeyColumnsTextBox.Text = leftKeys.All(key => columns.Contains(key, StringComparer.OrdinalIgnoreCase))
+            ? string.Join(",", leftKeys)
+            : columns.FirstOrDefault() ?? string.Empty;
     }
 
     private static T SelectedEnum<T>(ComboBox comboBox, T fallback) where T : struct, Enum

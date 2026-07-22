@@ -56,6 +56,18 @@
                 <Border Background="White" BorderBrush="#D8DEE8" BorderThickness="1" CornerRadius="6" Padding="12">
                     <DockPanel>
                         <TextBlock DockPanel.Dock="Top" Text="Tabele" FontSize="16" FontWeight="SemiBold" Margin="0,0,0,10" />
+                        <Grid DockPanel.Dock="Bottom" Margin="0,10,0,0">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+                            <ComboBox x:Name="ExportDelimiterComboBox" Height="30" SelectedIndex="0">
+                                <ComboBoxItem Content="Średnik (;)" Tag=";" />
+                                <ComboBoxItem Content="Przecinek (,)" Tag="," />
+                                <ComboBoxItem Content="Tabulator" Tag="&#9;" />
+                            </ComboBox>
+                            <Button Grid.Column="1" Content="Eksportuj" Height="30" Margin="8,0,0,0" Padding="12,0" Click="ExportTable_Click" />
+                        </Grid>
                         <ListBox x:Name="ImportsListBox" DisplayMemberPath="DisplayName" SelectionChanged="ImportsListBox_SelectionChanged" />
                     </DockPanel>
                 </Border>

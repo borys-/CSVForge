@@ -1,6 +1,7 @@
 using System.Collections.ObjectModel;
 using System.IO;
 using CSVForge.Application.Abstractions;
+using CSVForge.Application.Export;
 using CSVForge.Application.Tables;
 using CSVForge.Domain.Imports;
 using CSVForge.Domain.Operations;
@@ -20,6 +21,7 @@ public partial class MainWindow : Window
     private readonly IFindDuplicatesUseCase _findDuplicates;
     private readonly ICompareDatasetsUseCase _compareDatasets;
     private readonly IJoinDatasetsUseCase _joinDatasets;
+    private readonly IExportTableUseCase _exportTable;
 
     private CsvImport? _selectedImport;
     private string? _adHocTableName;
@@ -32,7 +34,8 @@ public partial class MainWindow : Window
         IBrowseTableUseCase browseTable,
         IFindDuplicatesUseCase findDuplicates,
         ICompareDatasetsUseCase compareDatasets,
-        IJoinDatasetsUseCase joinDatasets)
+        IJoinDatasetsUseCase joinDatasets,
+        IExportTableUseCase exportTable)
     {
         _createWorkspace = createWorkspace;
         _openWorkspace = openWorkspace;
@@ -42,6 +45,7 @@ public partial class MainWindow : Window
         _findDuplicates = findDuplicates;
         _compareDatasets = compareDatasets;
         _joinDatasets = joinDatasets;
+        _exportTable = exportTable;
 
         InitializeComponent();
     }
@@ -189,6 +193,40 @@ public partial class MainWindow : Window
             _adHocTableName = result.ResultTableName;
             await RefreshSelectedTableAsync();
         }, "Połączenie gotowe");
+    }
+
+    private async void ExportTable_Click(object sender, RoutedEventArgs e)
+    {
+        string? tableName = _adHocTableName ?? _selectedImport?.TableName;
+        if (tableName is null)
+        {
+            MessageBox.Show(this, "Wybierz tabelę do eksportu.", "CSVForge", MessageBoxButton.OK, MessageBoxImage.Information);
+            return;
+        }
+
+        SaveFileDialog dialog = new()
+        {
+            Filter = "CSV files (*.csv)|*.csv|All files (*.*)|*.*",
+            DefaultExt = ".csv",
+            AddExtension = true,
+            FileName = $"{tableName}.csv",
+            Title = "Eksportuj tabelę do CSV"
+        };
+
+        if (dialog.ShowDialog(this) != true)
+        {
+            return;
+        }
+
+        char delimiter = ExportDelimiterComboBox.SelectedItem is ComboBoxItem item && item.Tag is string tag && tag.Length > 0
+            ? tag[0]
+            : ';';
+
+        await RunUiActionAsync(async () =>
+        {
+            ExportResult result = await _exportTable.ExecuteAsync(new ExportTableRequest(tableName, dialog.FileName, delimiter, true));
+            MessageBox.Show(this, $"Wyeksportowano {result.ExportedRows} wierszy do:\n{result.FilePath}", "CSVForge", MessageBoxButton.OK, MessageBoxImage.Information);
+        }, "Eksport zakończony");
     }
 
     private async Task RefreshImportsAsync()

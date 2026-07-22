@@ -36,6 +36,8 @@ dotnet publish src/CSVForge.App.Wpf -p:PublishProfile=SelfContained
 
 Artifacts are written under `artifacts/publish/`. The framework-dependent build requires the .NET 10 Desktop Runtime; the self-contained build includes its runtime.
 
+Run `tools/Package-Release.ps1` to publish both variants and create versioned Windows ZIP packages under `artifacts/packages/`.
+
 ## Performance checks
 
 Run `tools/Measure-Performance.ps1` to generate deterministic datasets with 10,000, 50,000 and 100,000 rows and measure import, duplicate search, comparison, and join operations. Results are written to `artifacts/performance-results.csv`.

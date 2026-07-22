@@ -1,6 +1,7 @@
 using CSVForge.Infrastructure;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
+using Serilog;
 using System.Windows;
 using ApplicationDependencyInjection = CSVForge.Application.DependencyInjection;
 
@@ -15,7 +16,14 @@ public partial class App : System.Windows.Application
 
     public App()
     {
+        Log.Logger = new LoggerConfiguration()
+            .MinimumLevel.Information()
+            .Enrich.FromLogContext()
+            .WriteTo.File("logs/csvforge-wpf-.log", rollingInterval: RollingInterval.Day)
+            .CreateLogger();
+
         _host = Host.CreateDefaultBuilder()
+            .UseSerilog()
             .ConfigureServices(services =>
             {
                 ApplicationDependencyInjection.AddApplication(services);
@@ -39,6 +47,7 @@ public partial class App : System.Windows.Application
     {
         await _host.StopAsync();
         _host.Dispose();
+        await Log.CloseAndFlushAsync();
 
         base.OnExit(e);
     }

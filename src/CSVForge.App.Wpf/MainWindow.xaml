@@ -120,12 +120,11 @@
                                 <RowDefinition Height="Auto" />
                                 <RowDefinition Height="Auto" />
                                 <RowDefinition Height="Auto" />
+                                <RowDefinition Height="Auto" />
                             </Grid.RowDefinitions>
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="*" />
                                 <ColumnDefinition Width="170" />
-                                <ColumnDefinition Width="140" />
-                                <ColumnDefinition Width="140" />
                                 <ColumnDefinition Width="Auto" />
                                 <ColumnDefinition Width="Auto" />
                                 <ColumnDefinition Width="Auto" />
@@ -133,13 +132,13 @@
                             </Grid.ColumnDefinitions>
                             <TextBlock x:Name="TableTitleText" Text="Dane" FontSize="16" FontWeight="SemiBold" VerticalAlignment="Center" />
                             <TextBox x:Name="FilterTextBox" Grid.Column="1" Height="30" Margin="8,0" VerticalContentAlignment="Center" />
-                            <ComboBox x:Name="DuplicateColumnComboBox" Grid.Column="2" Height="30" Margin="0,0,8,0" IsEditable="True" />
-                            <ComboBox x:Name="CompareTableComboBox" Grid.Column="3" Height="30" Margin="0,0,8,0" DisplayMemberPath="DisplayName" SelectionChanged="CompareTableComboBox_SelectionChanged" />
-                            <Button Grid.Column="4" Content="Duplikaty" Height="30" MinWidth="88" Margin="0,0,8,0" Padding="12,0" Click="FindDuplicates_Click" />
-                            <Button Grid.Column="5" Content="Porównaj" Height="30" MinWidth="86" Margin="0,0,8,0" Padding="12,0" Click="CompareTables_Click" />
-                            <Button Grid.Column="6" Content="Połącz" Height="30" MinWidth="76" Margin="0,0,8,0" Padding="12,0" Click="JoinTables_Click" />
-                            <Button Grid.Column="7" Content="Filtruj" Height="30" MinWidth="78" Padding="12,0" Click="RefreshTable_Click" />
-                            <StackPanel Grid.Row="1" Grid.ColumnSpan="8" Orientation="Horizontal" Margin="0,8,0,0">
+                            <Button Grid.Column="5" Content="Filtruj" Height="30" MinWidth="78" Padding="12,0" Click="RefreshTable_Click" />
+                            <ComboBox x:Name="DuplicateColumnComboBox" Grid.Row="1" Grid.Column="0" Height="30" Margin="0,8,8,0" IsEditable="True" />
+                            <ComboBox x:Name="CompareTableComboBox" Grid.Row="1" Grid.Column="1" Height="30" Margin="0,8,8,0" DisplayMemberPath="DisplayName" SelectionChanged="CompareTableComboBox_SelectionChanged" />
+                            <Button Grid.Row="1" Grid.Column="2" Content="Duplikaty" Height="30" MinWidth="88" Margin="0,8,8,0" Padding="12,0" Click="FindDuplicates_Click" />
+                            <Button Grid.Row="1" Grid.Column="3" Content="Porównaj" Height="30" MinWidth="86" Margin="0,8,8,0" Padding="12,0" Click="CompareTables_Click" />
+                            <Button Grid.Row="1" Grid.Column="4" Content="Połącz" Height="30" MinWidth="76" Margin="0,8,0,0" Padding="12,0" Click="JoinTables_Click" />
+                            <StackPanel Grid.Row="2" Grid.ColumnSpan="6" Orientation="Horizontal" Margin="0,8,0,0">
                                 <TextBlock Text="Duplikaty:" VerticalAlignment="Center" />
                                 <ComboBox x:Name="DuplicateModeComboBox" Width="150" Height="28" Margin="6,0,16,0" SelectedIndex="0">
                                     <ComboBoxItem Content="Wszystkie wiersze" Tag="AllDuplicateRows" />
@@ -159,7 +158,7 @@
                                     <ComboBoxItem Content="RIGHT" Tag="Right" />
                                 </ComboBox>
                             </StackPanel>
-                            <Grid Grid.Row="2" Grid.ColumnSpan="8" Margin="0,8,0,0">
+                            <Grid Grid.Row="3" Grid.ColumnSpan="6" Margin="0,8,0,0">
                                 <Grid.ColumnDefinitions>
                                     <ColumnDefinition Width="Auto" />
                                     <ColumnDefinition Width="*" />

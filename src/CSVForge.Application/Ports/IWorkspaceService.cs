@@ -8,4 +8,5 @@ public interface IWorkspaceService
     Task<Workspace> CreateAsync(string workspacePath, CancellationToken cancellationToken);
     Task<Workspace> OpenAsync(string workspacePath, CancellationToken cancellationToken);
     Task<IReadOnlyList<CsvImport>> ListImportsAsync(CancellationToken cancellationToken);
+    Task DeleteImportAsync(Guid importId, CancellationToken cancellationToken);
 }

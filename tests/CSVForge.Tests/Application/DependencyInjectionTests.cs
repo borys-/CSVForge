@@ -34,6 +34,11 @@ public sealed class DependencyInjectionTests
             return Task.FromResult<IReadOnlyList<CsvImport>>(Array.Empty<CsvImport>());
         }
 
+        public Task DeleteImportAsync(Guid importId, CancellationToken cancellationToken)
+        {
+            return Task.CompletedTask;
+        }
+
         public Task<Workspace> OpenAsync(string workspacePath, CancellationToken cancellationToken)
         {
             return Task.FromResult(new Workspace(workspacePath, "Test", DateTimeOffset.UnixEpoch));

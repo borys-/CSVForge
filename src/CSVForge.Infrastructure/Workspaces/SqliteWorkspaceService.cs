@@ -80,6 +80,40 @@ internal sealed class SqliteWorkspaceService(IWorkspaceContext workspaceContext)
         return imports;
     }
 
+    public async Task DeleteImportAsync(Guid importId, CancellationToken cancellationToken)
+    {
+        if (workspaceContext.CurrentWorkspacePath is null)
+        {
+            throw new InvalidOperationException("Open or create a workspace before deleting imports.");
+        }
+
+        await using SqliteConnection connection = SqliteConnectionFactory.Create(workspaceContext.CurrentWorkspacePath);
+        await connection.OpenAsync(cancellationToken);
+        await using SqliteTransaction transaction = (SqliteTransaction)await connection.BeginTransactionAsync(cancellationToken);
+
+        await using SqliteCommand findCommand = connection.CreateCommand();
+        findCommand.Transaction = transaction;
+        findCommand.CommandText = "SELECT table_name FROM _workspace_imports WHERE id = $id;";
+        findCommand.Parameters.AddWithValue("$id", importId.ToString());
+        string? tableName = (string?)await findCommand.ExecuteScalarAsync(cancellationToken);
+        if (tableName is null)
+        {
+            throw new InvalidOperationException("Import does not exist.");
+        }
+
+        await using SqliteCommand dropCommand = connection.CreateCommand();
+        dropCommand.Transaction = transaction;
+        dropCommand.CommandText = $"DROP TABLE {Csv.CsvImportNameHelper.QuoteIdentifier(tableName)};";
+        await dropCommand.ExecuteNonQueryAsync(cancellationToken);
+
+        await using SqliteCommand deleteCommand = connection.CreateCommand();
+        deleteCommand.Transaction = transaction;
+        deleteCommand.CommandText = "DELETE FROM _workspace_imports WHERE id = $id;";
+        deleteCommand.Parameters.AddWithValue("$id", importId.ToString());
+        await deleteCommand.ExecuteNonQueryAsync(cancellationToken);
+        await transaction.CommitAsync(cancellationToken);
+    }
+
     private static string NormalizeWorkspacePath(string workspacePath)
     {
         if (string.IsNullOrWhiteSpace(workspacePath))

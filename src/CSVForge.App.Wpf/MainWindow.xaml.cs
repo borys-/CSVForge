@@ -26,6 +26,7 @@ public partial class MainWindow : Window
     private readonly IJoinDatasetsUseCase _joinDatasets;
     private readonly IExportTableUseCase _exportTable;
     private readonly IListOperationsUseCase _listOperations;
+    private readonly IDeleteImportUseCase _deleteImport;
 
     private CsvImport? _selectedImport;
     private string? _adHocTableName;
@@ -43,7 +44,8 @@ public partial class MainWindow : Window
         ICompareDatasetsUseCase compareDatasets,
         IJoinDatasetsUseCase joinDatasets,
         IExportTableUseCase exportTable,
-        IListOperationsUseCase listOperations)
+        IListOperationsUseCase listOperations,
+        IDeleteImportUseCase deleteImport)
     {
         _createWorkspace = createWorkspace;
         _openWorkspace = openWorkspace;
@@ -55,6 +57,7 @@ public partial class MainWindow : Window
         _joinDatasets = joinDatasets;
         _exportTable = exportTable;
         _listOperations = listOperations;
+        _deleteImport = deleteImport;
 
         InitializeComponent();
     }
@@ -287,6 +290,32 @@ public partial class MainWindow : Window
         _adHocTableName = operation.ResultTableName;
         _pageOffset = 0;
         await RefreshSelectedTableAsync();
+    }
+
+    private async void DeleteImport_Click(object sender, RoutedEventArgs e)
+    {
+        if (_selectedImport is null)
+        {
+            return;
+        }
+
+        MessageBoxResult confirmation = MessageBox.Show(this,
+            $"Usunąć import '{_selectedImport.DisplayName}' i jego tabelę?",
+            "CSVForge", MessageBoxButton.YesNo, MessageBoxImage.Warning);
+        if (confirmation != MessageBoxResult.Yes)
+        {
+            return;
+        }
+
+        Guid importId = _selectedImport.Id;
+        await RunUiActionAsync(async cancellationToken =>
+        {
+            await _deleteImport.ExecuteAsync(importId, cancellationToken);
+            _selectedImport = null;
+            _adHocTableName = null;
+            DataGrid.ItemsSource = null;
+            await RefreshImportsAsync();
+        }, "Import usunięty");
     }
 
     private void SelectImport(Guid importId)

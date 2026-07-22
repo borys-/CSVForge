@@ -134,7 +134,7 @@ public partial class MainWindow : Window
 
             string displayName = Path.GetFileNameWithoutExtension(path);
             Progress<ImportProgress> progress = new(value => StatusText.Text = $"Import: {value.ProcessedRows} wierszy");
-            ImportResult result = await _importCsv.ExecuteAsync(new ImportRequest(path, displayName, HasHeaderCheckBox.IsChecked == true, null, null), progress, cancellationToken);
+            ImportResult result = await _importCsv.ExecuteAsync(CreateImportRequest(path, displayName), progress, cancellationToken);
             await RefreshImportsAsync();
             SelectImport(result.Import.Id);
         }, "Import zakończony");
@@ -151,7 +151,7 @@ public partial class MainWindow : Window
 
         await RunUiActionAsync(async cancellationToken =>
         {
-            CsvPreview preview = await _previewCsv.ExecuteAsync(new ImportRequest(path, Path.GetFileNameWithoutExtension(path), HasHeaderCheckBox.IsChecked == true, null, null), cancellationToken);
+            CsvPreview preview = await _previewCsv.ExecuteAsync(CreateImportRequest(path, Path.GetFileNameWithoutExtension(path)), cancellationToken);
             List<Dictionary<string, string?>> rows = preview.Rows.Select(row => preview.Columns
                 .Select((column, index) => new { column.Name, Value = index < row.Count ? row[index] : null })
                 .ToDictionary(item => item.Name, item => item.Value)).ToList();
@@ -517,6 +517,12 @@ public partial class MainWindow : Window
         return comboBox.SelectedItem is ComboBoxItem { Tag: string value } && Enum.TryParse(value, true, out T parsed)
             ? parsed
             : fallback;
+    }
+
+    private ImportRequest CreateImportRequest(string path, string displayName)
+    {
+        string mode = HeaderModeComboBox.SelectedItem is ComboBoxItem { Tag: string tag } ? tag : "Auto";
+        return new ImportRequest(path, displayName, mode != "No", null, null, 500, mode == "Auto");
     }
 
     private async Task RunUiActionAsync(Func<Task> action, string successMessage)

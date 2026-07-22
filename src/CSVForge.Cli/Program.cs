@@ -64,7 +64,7 @@ static async Task<int> RunAsync(IServiceProvider services, string[] args)
             string file = Required(options, "file");
             string name = options.GetValueOrDefault("name") ?? Path.GetFileNameWithoutExtension(file);
             ImportResult result = await services.GetRequiredService<IImportCsvUseCase>()
-                .ExecuteAsync(new ImportRequest(file, name, !options.ContainsKey("no-header"), Delimiter(options), options.GetValueOrDefault("encoding"), IntOption(options, "batch-size", 500)));
+                .ExecuteAsync(new ImportRequest(file, name, !options.ContainsKey("no-header"), Delimiter(options), options.GetValueOrDefault("encoding"), IntOption(options, "batch-size", 500), !options.ContainsKey("no-header")));
             Console.WriteLine($"Zaimportowano {result.Import.RowCount} wierszy do {result.Import.TableName}.");
             return 0;
         }

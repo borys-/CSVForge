@@ -96,6 +96,28 @@ public sealed class CsvReaderServiceTests
     }
 
     [Fact]
+    public async Task PreviewCsvUseCase_AutoDetectsHeader()
+    {
+        string csvPath = await WriteTempFileAsync("Name;Age\r\nAda;42\r\n", Encoding.UTF8);
+
+        CsvPreview preview = await CreatePreviewUseCase().ExecuteAsync(new ImportRequest(csvPath, "People", true, null, null, 500, true));
+
+        Assert.Equal(["Name", "Age"], preview.Columns.Select(column => column.Name));
+        Assert.Single(preview.Rows);
+    }
+
+    [Fact]
+    public async Task PreviewCsvUseCase_AutoDetectsTextRowsWithoutHeader()
+    {
+        string csvPath = await WriteTempFileAsync("Ada;Warszawa\r\nOla;Krakow\r\n", Encoding.UTF8);
+
+        CsvPreview preview = await CreatePreviewUseCase().ExecuteAsync(new ImportRequest(csvPath, "People", true, null, null, 500, true));
+
+        Assert.Equal(["Column1", "Column2"], preview.Columns.Select(column => column.Name));
+        Assert.Equal(2, preview.Rows.Count);
+    }
+
+    [Fact]
     public async Task PreviewCsvUseCase_NormalizesDuplicateHeaders()
     {
         string csvPath = await WriteTempFileAsync("Order Id;Order Id;123\r\n1;2;3\r\n", Encoding.UTF8);

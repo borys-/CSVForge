@@ -36,7 +36,15 @@ internal sealed class CsvReaderService : ICsvReader
             }
 
             string[] firstRecord = csv.Parser.Record ?? [];
-            if (request.HasHeader)
+            string[]? secondRecord = null;
+            bool hasHeader = request.HasHeader;
+            if (request.AutoDetectHeader && await csv.ReadAsync())
+            {
+                secondRecord = csv.Parser.Record ?? [];
+                hasHeader = CsvHeaderDetector.LooksLikeHeader(firstRecord, secondRecord);
+            }
+
+            if (hasHeader)
             {
                 columns.AddRange(CreateColumns(firstRecord));
             }
@@ -44,6 +52,10 @@ internal sealed class CsvReaderService : ICsvReader
             {
                 columns.AddRange(CreateGeneratedColumns(firstRecord.Length));
                 rows.Add(firstRecord);
+            }
+            if (secondRecord is not null)
+            {
+                rows.Add(secondRecord);
             }
 
             while (rows.Count < rowLimit && await csv.ReadAsync())

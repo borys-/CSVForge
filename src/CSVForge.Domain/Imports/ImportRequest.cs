@@ -6,4 +6,5 @@ public sealed record ImportRequest(
     bool HasHeader,
     char? Delimiter,
     string? EncodingName,
-    int BatchSize = 500);
+    int BatchSize = 500,
+    bool AutoDetectHeader = false);

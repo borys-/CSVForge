@@ -65,10 +65,18 @@ internal sealed class CsvImporterService(IWorkspaceContext workspaceContext) : I
         }
 
         string[] firstRecord = csv.Parser.Record ?? [];
-        IReadOnlyList<string> originalHeaders = request.HasHeader
+        string[]? secondRecord = null;
+        bool hasHeader = request.HasHeader;
+        if (request.AutoDetectHeader && await csv.ReadAsync())
+        {
+            secondRecord = csv.Parser.Record ?? [];
+            hasHeader = CsvHeaderDetector.LooksLikeHeader(firstRecord, secondRecord);
+        }
+
+        IReadOnlyList<string> originalHeaders = hasHeader
             ? firstRecord
             : CsvImportNameHelper.GenerateColumns(firstRecord.Length);
-        IReadOnlyList<string> columnNames = request.HasHeader
+        IReadOnlyList<string> columnNames = hasHeader
             ? CsvImportNameHelper.NormalizeColumns(firstRecord)
             : originalHeaders;
 
@@ -79,9 +87,20 @@ internal sealed class CsvImporterService(IWorkspaceContext workspaceContext) : I
         long rowCount = 0;
         List<string[]> batch = [];
         List<ImportError> errors = [];
-        if (!request.HasHeader)
+        if (!hasHeader)
         {
             batch.Add(firstRecord);
+        }
+        if (secondRecord is not null)
+        {
+            if (secondRecord.Length == columnNames.Count)
+            {
+                batch.Add(secondRecord);
+            }
+            else
+            {
+                errors.Add(new ImportError(csv.Parser.Row, $"Expected {columnNames.Count} fields, found {secondRecord.Length}.", csv.Parser.RawRecord));
+            }
         }
 
         while (await csv.ReadAsync())

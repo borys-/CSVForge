@@ -202,6 +202,7 @@ public partial class MainWindow : Window
         _pageOffset = 0;
         _sortColumn = null;
         _sortDescending = false;
+        UpdateComparisonFiles();
         DuplicateColumnComboBox.ItemsSource = _selectedImport?.Columns.Select(column => column.Name).ToArray();
         DuplicateColumnComboBox.SelectedIndex = DuplicateColumnComboBox.Items.Count > 0 ? 0 : -1;
         LeftOutputColumnsTextBox.Text = _selectedImport is null ? string.Empty : string.Join(",", _selectedImport.Columns.Select(column => column.Name));
@@ -295,6 +296,11 @@ public partial class MainWindow : Window
         if (CompareTableComboBox.SelectedItem is not CsvImport rightImport)
         {
             ShowValidationMessage("Wybierz prawy plik do porównania.");
+            return;
+        }
+        if (rightImport.Id == _selectedImport.Id)
+        {
+            ShowValidationMessage("Lewy i prawy plik muszą być różne.");
             return;
         }
         IReadOnlyList<string> keyColumns = SelectedKeyColumns();
@@ -399,8 +405,8 @@ public partial class MainWindow : Window
     {
         IReadOnlyList<CsvImport> imports = await _listImportedTables.ExecuteAsync();
         ImportsListBox.ItemsSource = imports;
-        CompareTableComboBox.ItemsSource = imports;
         JoinTableComboBox.ItemsSource = imports;
+        UpdateComparisonFiles();
     }
 
     private async Task RefreshOperationsAsync()
@@ -537,6 +543,21 @@ public partial class MainWindow : Window
         {
             FilesPanelColumn.Width = new GridLength(Math.Min(requiredWidth, FilesPanelColumn.MaxWidth));
         }
+    }
+
+    private void UpdateComparisonFiles()
+    {
+        CompareLeftFileTextBox.Text = _selectedImport?.SourcePath ?? string.Empty;
+        CsvImport? previousSelection = CompareTableComboBox.SelectedItem as CsvImport;
+        IEnumerable<CsvImport> imports = ImportsListBox.ItemsSource as IEnumerable<CsvImport> ?? [];
+        CsvImport[] availableRightFiles = imports
+            .Where(import => _selectedImport is null || import.Id != _selectedImport.Id)
+            .ToArray();
+
+        CompareTableComboBox.ItemsSource = availableRightFiles;
+        CompareTableComboBox.SelectedItem = previousSelection is not null
+            ? availableRightFiles.FirstOrDefault(import => import.Id == previousSelection.Id)
+            : null;
     }
 
     private async Task RefreshSelectedTableAsync()

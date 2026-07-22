@@ -20,4 +20,10 @@
     <Using Include="Xunit" />
   </ItemGroup>
 
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\CSVForge.Domain\CSVForge.Domain.csproj" />
+    <ProjectReference Include="..\..\src\CSVForge.Application\CSVForge.Application.csproj" />
+    <ProjectReference Include="..\..\src\CSVForge.Infrastructure\CSVForge.Infrastructure.csproj" />
+  </ItemGroup>
+
 </Project>

@@ -44,12 +44,12 @@ public sealed class SqliteDatasetComparerTests
             .ExecuteAsync(new BrowseTableRequest(result.ResultTableName!, 10, 0, "Email", false, null));
 
         Assert.Equal(3, page.Rows.Count);
-        Assert.Contains(page.Rows, row => row["Email"] == "a@example.com" && row["compare_status"] == "common");
-        Assert.Contains(page.Rows, row => row["Email"] == "b@example.com" && row["compare_status"] == "left_only");
-        Assert.Contains(page.Rows, row => row["Email"] == "c@example.com" && row["compare_status"] == "right_only");
-        Assert.Contains("common: 1", result.Message);
-        Assert.Contains("left_only: 1", result.Message);
-        Assert.Contains("right_only: 1", result.Message);
+        Assert.Contains(page.Rows, row => row["Email"] == "a@example.com" && row["status_porównania"] == "wspólne");
+        Assert.Contains(page.Rows, row => row["Email"] == "b@example.com" && row["status_porównania"] == "tylko lewy");
+        Assert.Contains(page.Rows, row => row["Email"] == "c@example.com" && row["status_porównania"] == "tylko prawy");
+        Assert.Contains("wspólne: 1", result.Message);
+        Assert.Contains("tylko lewy: 1", result.Message);
+        Assert.Contains("tylko prawy: 1", result.Message);
 
         await using SqliteConnection connection = new($"Data Source={workspacePath}");
         await connection.OpenAsync();

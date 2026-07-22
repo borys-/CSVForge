@@ -8,6 +8,11 @@ namespace CSVForge.Infrastructure.Operations;
 
 internal sealed class SqliteDatasetComparer(IWorkspaceContext workspaceContext) : IDatasetComparer
 {
+    private const string StatusColumn = "status_porównania";
+    private const string CommonStatus = "wspólne";
+    private const string LeftOnlyStatus = "tylko lewy";
+    private const string RightOnlyStatus = "tylko prawy";
+
     public async Task<OperationResult> CompareAsync(DatasetCompareRequest request, CancellationToken cancellationToken)
     {
         if (workspaceContext.CurrentWorkspacePath is null)
@@ -55,36 +60,36 @@ internal sealed class SqliteDatasetComparer(IWorkspaceContext workspaceContext) 
         {
             DatasetCompareMode.CommonRows => $"""
                 CREATE TABLE {result} AS
-                SELECT {leftKeys}, 'common' AS compare_status
+                SELECT {leftKeys}, '{CommonStatus}' AS {CsvImportNameHelper.QuoteIdentifier(StatusColumn)}
                 FROM {left} AS l
                 INNER JOIN {right} AS r ON {joinPredicate};
                 """,
             DatasetCompareMode.LeftOnly => $"""
                 CREATE TABLE {result} AS
-                SELECT {leftKeys}, 'left_only' AS compare_status
+                SELECT {leftKeys}, '{LeftOnlyStatus}' AS {CsvImportNameHelper.QuoteIdentifier(StatusColumn)}
                 FROM {left} AS l
                 LEFT JOIN {right} AS r ON {joinPredicate}
                 WHERE {BuildNullPredicate(request.RightKeyColumns, "r")};
                 """,
             DatasetCompareMode.RightOnly => $"""
                 CREATE TABLE {result} AS
-                SELECT {rightKeys}, 'right_only' AS compare_status
+                SELECT {rightKeys}, '{RightOnlyStatus}' AS {CsvImportNameHelper.QuoteIdentifier(StatusColumn)}
                 FROM {right} AS r
                 LEFT JOIN {left} AS l ON {joinPredicate}
                 WHERE {BuildNullPredicate(request.LeftKeyColumns, "l")};
                 """,
             DatasetCompareMode.AllWithStatus => $"""
                 CREATE TABLE {result} AS
-                SELECT {leftKeys}, 'common' AS compare_status
+                SELECT {leftKeys}, '{CommonStatus}' AS {CsvImportNameHelper.QuoteIdentifier(StatusColumn)}
                 FROM {left} AS l
                 INNER JOIN {right} AS r ON {joinPredicate}
                 UNION ALL
-                SELECT {leftKeys}, 'left_only' AS compare_status
+                SELECT {leftKeys}, '{LeftOnlyStatus}' AS {CsvImportNameHelper.QuoteIdentifier(StatusColumn)}
                 FROM {left} AS l
                 LEFT JOIN {right} AS r ON {joinPredicate}
                 WHERE {BuildNullPredicate(request.RightKeyColumns, "r")}
                 UNION ALL
-                SELECT {rightKeys}, 'right_only' AS compare_status
+                SELECT {rightKeys}, '{RightOnlyStatus}' AS {CsvImportNameHelper.QuoteIdentifier(StatusColumn)}
                 FROM {right} AS r
                 LEFT JOIN {left} AS l ON {joinPredicate}
                 WHERE {BuildNullPredicate(request.LeftKeyColumns, "l")};
@@ -112,7 +117,8 @@ internal sealed class SqliteDatasetComparer(IWorkspaceContext workspaceContext) 
     private static async Task<IReadOnlyDictionary<string, long>> CountStatusesAsync(SqliteConnection connection, string tableName, CancellationToken cancellationToken)
     {
         await using SqliteCommand command = connection.CreateCommand();
-        command.CommandText = $"SELECT compare_status, COUNT(*) FROM {CsvImportNameHelper.QuoteIdentifier(tableName)} GROUP BY compare_status;";
+        string statusColumn = CsvImportNameHelper.QuoteIdentifier(StatusColumn);
+        command.CommandText = $"SELECT {statusColumn}, COUNT(*) FROM {CsvImportNameHelper.QuoteIdentifier(tableName)} GROUP BY {statusColumn};";
         Dictionary<string, long> counts = new(StringComparer.OrdinalIgnoreCase);
         await using SqliteDataReader reader = await command.ExecuteReaderAsync(cancellationToken);
         while (await reader.ReadAsync(cancellationToken))

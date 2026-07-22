@@ -22,6 +22,8 @@ internal sealed class SqliteDatasetComparer(IWorkspaceContext workspaceContext) 
 
         await using SqliteConnection connection = SqliteConnectionFactory.Create(workspaceContext.CurrentWorkspacePath);
         await connection.OpenAsync(cancellationToken);
+        await SqliteIndexHelper.EnsureAsync(connection, request.LeftTableName, request.LeftKeyColumns, cancellationToken);
+        await SqliteIndexHelper.EnsureAsync(connection, request.RightTableName, request.RightKeyColumns, cancellationToken);
 
         string resultTableName = $"compare_{DateTimeOffset.UtcNow:yyyyMMddHHmmssfff}";
         await using SqliteCommand command = connection.CreateCommand();

@@ -18,6 +18,8 @@ internal sealed class SqliteDatasetJoiner(IWorkspaceContext workspaceContext) : 
         Validate(request);
         await using SqliteConnection connection = SqliteConnectionFactory.Create(workspaceContext.CurrentWorkspacePath);
         await connection.OpenAsync(cancellationToken);
+        await SqliteIndexHelper.EnsureAsync(connection, request.LeftTableName, request.LeftJoinColumns, cancellationToken);
+        await SqliteIndexHelper.EnsureAsync(connection, request.RightTableName, request.RightJoinColumns, cancellationToken);
 
         string resultTableName = $"join_{DateTimeOffset.UtcNow:yyyyMMddHHmmssfff}";
         await using SqliteCommand command = connection.CreateCommand();

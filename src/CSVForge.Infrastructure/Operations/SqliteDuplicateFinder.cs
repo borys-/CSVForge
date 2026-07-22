@@ -22,6 +22,7 @@ internal sealed class SqliteDuplicateFinder(IWorkspaceContext workspaceContext) 
 
         await using SqliteConnection connection = SqliteConnectionFactory.Create(workspaceContext.CurrentWorkspacePath);
         await connection.OpenAsync(cancellationToken);
+        await SqliteIndexHelper.EnsureAsync(connection, request.TableName, request.KeyColumns, cancellationToken);
 
         string resultTableName = $"duplicates_{DateTimeOffset.UtcNow:yyyyMMddHHmmssfff}";
         string keyColumnsSql = string.Join(", ", request.KeyColumns.Select(CsvImportNameHelper.QuoteIdentifier));

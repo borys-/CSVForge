@@ -5,6 +5,7 @@ using CSVForge.Domain.Imports;
 using CSVForge.Domain.Operations;
 using CSVForge.Infrastructure;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Data.Sqlite;
 
 namespace CSVForge.Tests.Infrastructure;
 
@@ -46,5 +47,11 @@ public sealed class SqliteDatasetComparerTests
         Assert.Contains(page.Rows, row => row["Email"] == "a@example.com" && row["compare_status"] == "common");
         Assert.Contains(page.Rows, row => row["Email"] == "b@example.com" && row["compare_status"] == "left_only");
         Assert.Contains(page.Rows, row => row["Email"] == "c@example.com" && row["compare_status"] == "right_only");
+
+        await using SqliteConnection connection = new($"Data Source={workspacePath}");
+        await connection.OpenAsync();
+        await using SqliteCommand indexCommand = connection.CreateCommand();
+        indexCommand.CommandText = "SELECT COUNT(*) FROM sqlite_master WHERE type = 'index' AND name LIKE 'idx_csvforge_%';";
+        Assert.Equal(2L, (long)(await indexCommand.ExecuteScalarAsync() ?? 0L));
     }
 }

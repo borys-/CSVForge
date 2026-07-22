@@ -4,6 +4,7 @@ obj/
 out/
 publish/
 TestResults/
+artifacts/
 
 # User and IDE files
 .vs/

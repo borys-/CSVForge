@@ -39,6 +39,7 @@
                         <ColumnDefinition Width="Auto" />
                         <ColumnDefinition Width="Auto" />
                         <ColumnDefinition Width="Auto" />
+                        <ColumnDefinition Width="Auto" />
                     </Grid.ColumnDefinitions>
 
                     <TextBlock Text="Workspace" VerticalAlignment="Center" FontWeight="SemiBold" />
@@ -47,9 +48,10 @@
 
                     <TextBlock Grid.Row="1" Text="CSV" VerticalAlignment="Center" FontWeight="SemiBold" Margin="0,10,0,0" />
                     <TextBox x:Name="CsvPathTextBox" Grid.Row="1" Grid.Column="1" Height="32" Margin="8,10,8,0" VerticalContentAlignment="Center" />
-                    <Button Grid.Row="1" Grid.Column="2" Content="Wybierz" Height="32" MinWidth="86" Margin="0,10,8,0" Padding="12,0" Click="ChooseCsv_Click" />
-                    <Button Grid.Row="1" Grid.Column="3" Content="Podgląd" Height="32" MinWidth="86" Margin="0,10,8,0" Padding="12,0" Click="PreviewCsv_Click" />
-                    <Button Grid.Row="1" Grid.Column="4" Content="Importuj" Height="32" MinWidth="96" Margin="0,10,0,0" Padding="12,0" Click="ImportCsv_Click" />
+                    <CheckBox x:Name="HasHeaderCheckBox" Grid.Row="1" Grid.Column="2" Content="Nagłówek" IsChecked="True" VerticalAlignment="Center" Margin="0,10,12,0" />
+                    <Button Grid.Row="1" Grid.Column="3" Content="Wybierz" Height="32" MinWidth="86" Margin="0,10,8,0" Padding="12,0" Click="ChooseCsv_Click" />
+                    <Button Grid.Row="1" Grid.Column="4" Content="Podgląd" Height="32" MinWidth="86" Margin="0,10,8,0" Padding="12,0" Click="PreviewCsv_Click" />
+                    <Button Grid.Row="1" Grid.Column="5" Content="Importuj" Height="32" MinWidth="96" Margin="0,10,0,0" Padding="12,0" Click="ImportCsv_Click" />
                 </Grid>
             </Border>
 

@@ -130,7 +130,7 @@ public partial class MainWindow : Window
 
             string displayName = Path.GetFileNameWithoutExtension(path);
             Progress<ImportProgress> progress = new(value => StatusText.Text = $"Import: {value.ProcessedRows} wierszy");
-            ImportResult result = await _importCsv.ExecuteAsync(new ImportRequest(path, displayName, true, null, null), progress, cancellationToken);
+            ImportResult result = await _importCsv.ExecuteAsync(new ImportRequest(path, displayName, HasHeaderCheckBox.IsChecked == true, null, null), progress, cancellationToken);
             await RefreshImportsAsync();
             SelectImport(result.Import.Id);
         }, "Import zakończony");
@@ -147,7 +147,7 @@ public partial class MainWindow : Window
 
         await RunUiActionAsync(async cancellationToken =>
         {
-            CsvPreview preview = await _previewCsv.ExecuteAsync(new ImportRequest(path, Path.GetFileNameWithoutExtension(path), true, null, null), cancellationToken);
+            CsvPreview preview = await _previewCsv.ExecuteAsync(new ImportRequest(path, Path.GetFileNameWithoutExtension(path), HasHeaderCheckBox.IsChecked == true, null, null), cancellationToken);
             List<Dictionary<string, string?>> rows = preview.Rows.Select(row => preview.Columns
                 .Select((column, index) => new { column.Name, Value = index < row.Count ? row[index] : null })
                 .ToDictionary(item => item.Name, item => item.Value)).ToList();

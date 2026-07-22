@@ -65,12 +65,16 @@
                         <Grid DockPanel.Dock="Top" Margin="0,0,0,10">
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="*" />
-                                <ColumnDefinition Width="220" />
+                                <ColumnDefinition Width="170" />
+                                <ColumnDefinition Width="150" />
+                                <ColumnDefinition Width="Auto" />
                                 <ColumnDefinition Width="Auto" />
                             </Grid.ColumnDefinitions>
                             <TextBlock x:Name="TableTitleText" Text="Dane" FontSize="16" FontWeight="SemiBold" VerticalAlignment="Center" />
                             <TextBox x:Name="FilterTextBox" Grid.Column="1" Height="30" Margin="8,0" VerticalContentAlignment="Center" />
-                            <Button Grid.Column="2" Content="Filtruj" Height="30" MinWidth="78" Padding="12,0" Click="RefreshTable_Click" />
+                            <ComboBox x:Name="DuplicateColumnComboBox" Grid.Column="2" Height="30" Margin="0,0,8,0" />
+                            <Button Grid.Column="3" Content="Duplikaty" Height="30" MinWidth="88" Margin="0,0,8,0" Padding="12,0" Click="FindDuplicates_Click" />
+                            <Button Grid.Column="4" Content="Filtruj" Height="30" MinWidth="78" Padding="12,0" Click="RefreshTable_Click" />
                         </Grid>
                         <DataGrid x:Name="DataGrid"
                                   AutoGenerateColumns="True"

@@ -3,6 +3,7 @@ using System.IO;
 using CSVForge.Application.Abstractions;
 using CSVForge.Application.Tables;
 using CSVForge.Domain.Imports;
+using CSVForge.Domain.Operations;
 using Microsoft.Win32;
 using System.Windows;
 using System.Windows.Controls;
@@ -16,21 +17,25 @@ public partial class MainWindow : Window
     private readonly IImportCsvUseCase _importCsv;
     private readonly IListImportedTablesUseCase _listImportedTables;
     private readonly IBrowseTableUseCase _browseTable;
+    private readonly IFindDuplicatesUseCase _findDuplicates;
 
     private CsvImport? _selectedImport;
+    private string? _adHocTableName;
 
     public MainWindow(
         ICreateWorkspaceUseCase createWorkspace,
         IOpenWorkspaceUseCase openWorkspace,
         IImportCsvUseCase importCsv,
         IListImportedTablesUseCase listImportedTables,
-        IBrowseTableUseCase browseTable)
+        IBrowseTableUseCase browseTable,
+        IFindDuplicatesUseCase findDuplicates)
     {
         _createWorkspace = createWorkspace;
         _openWorkspace = openWorkspace;
         _importCsv = importCsv;
         _listImportedTables = listImportedTables;
         _browseTable = browseTable;
+        _findDuplicates = findDuplicates;
 
         InitializeComponent();
     }
@@ -95,12 +100,35 @@ public partial class MainWindow : Window
     private async void ImportsListBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
     {
         _selectedImport = ImportsListBox.SelectedItem as CsvImport;
+        _adHocTableName = null;
+        DuplicateColumnComboBox.ItemsSource = _selectedImport?.Columns.Select(column => column.Name).ToArray();
+        DuplicateColumnComboBox.SelectedIndex = DuplicateColumnComboBox.Items.Count > 0 ? 0 : -1;
         await RefreshSelectedTableAsync();
     }
 
     private async void RefreshTable_Click(object sender, RoutedEventArgs e)
     {
         await RefreshSelectedTableAsync();
+    }
+
+    private async void FindDuplicates_Click(object sender, RoutedEventArgs e)
+    {
+        if (_selectedImport is null || DuplicateColumnComboBox.SelectedItem is not string columnName)
+        {
+            return;
+        }
+
+        await RunUiActionAsync(async () =>
+        {
+            OperationResult result = await _findDuplicates.ExecuteAsync(new DuplicateSearchRequest(
+                _selectedImport.TableName,
+                [columnName],
+                DuplicateSearchMode.AllDuplicateRows,
+                true));
+
+            _adHocTableName = result.ResultTableName;
+            await RefreshSelectedTableAsync();
+        }, "Duplikaty gotowe");
     }
 
     private async Task RefreshImportsAsync()
@@ -123,7 +151,8 @@ public partial class MainWindow : Window
 
     private async Task RefreshSelectedTableAsync()
     {
-        if (_selectedImport is null)
+        string? tableName = _adHocTableName ?? _selectedImport?.TableName;
+        if (tableName is null)
         {
             return;
         }
@@ -131,14 +160,15 @@ public partial class MainWindow : Window
         await RunUiActionAsync(async () =>
         {
             TablePage page = await _browseTable.ExecuteAsync(new BrowseTableRequest(
-                _selectedImport.TableName,
+                tableName,
                 200,
                 0,
                 null,
                 false,
                 FilterTextBox.Text.Trim()));
 
-            TableTitleText.Text = $"{_selectedImport.DisplayName} ({page.TotalRows} wierszy)";
+            string title = _adHocTableName is null ? _selectedImport!.DisplayName : "Duplikaty";
+            TableTitleText.Text = $"{title} ({page.TotalRows} wierszy)";
             DataGrid.ItemsSource = ToRows(page);
         }, "Tabela odświeżona");
     }

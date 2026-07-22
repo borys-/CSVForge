@@ -38,7 +38,7 @@ internal static class CsvImportNameHelper
         for (int i = 0; i < headers.Count; i++)
         {
             string originalName = string.IsNullOrWhiteSpace(headers[i]) ? $"Column{i + 1}" : headers[i];
-            columns.Add(MakeUnique(NormalizeIdentifier(originalName, "Column"), seenNames));
+            columns.Add(MakeUnique(NormalizeIdentifier(originalName, "Column", 56), seenNames));
         }
 
         return columns;
@@ -51,7 +51,7 @@ internal static class CsvImportNameHelper
 
     public static string CreateTableName(string displayName)
     {
-        return $"import_{NormalizeIdentifier(displayName, "csv")}_{DateTimeOffset.UtcNow:yyyyMMddHHmmssfff}";
+        return $"import_{NormalizeIdentifier(displayName, "csv", 39)}_{DateTimeOffset.UtcNow:yyyyMMddHHmmssfff}";
     }
 
     public static string QuoteIdentifier(string value)
@@ -59,7 +59,7 @@ internal static class CsvImportNameHelper
         return "\"" + value.Replace("\"", "\"\"") + "\"";
     }
 
-    private static string NormalizeIdentifier(string value, string fallback)
+    private static string NormalizeIdentifier(string value, string fallback, int maxLength)
     {
         StringBuilder builder = new();
 
@@ -77,6 +77,11 @@ internal static class CsvImportNameHelper
         if (char.IsDigit(normalized[0]))
         {
             normalized = $"{fallback}_{normalized}";
+        }
+
+        if (normalized.Length > maxLength)
+        {
+            normalized = normalized[..maxLength].TrimEnd('_');
         }
 
         return normalized;

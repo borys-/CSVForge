@@ -176,6 +176,20 @@ public sealed class CsvImporterServiceTests
         Assert.Empty(result.Errors);
     }
 
+    [Fact]
+    public async Task ImportCsvUseCase_TruncatesLongTableAndColumnIdentifiers()
+    {
+        string longName = new('a', 120);
+        (ServiceProvider provider, string csvPath) = await CreateWorkspaceAndCsvAsync($"{longName};{longName}\r\n1;2\r\n");
+
+        ImportResult result = await provider.GetRequiredService<IImportCsvUseCase>()
+            .ExecuteAsync(new ImportRequest(csvPath, longName, true, null, null));
+
+        Assert.True(result.Import.TableName.Length <= 64);
+        Assert.All(result.Import.Columns, column => Assert.True(column.Name.Length <= 64));
+        Assert.Equal(2, result.Import.Columns.Select(column => column.Name).Distinct(StringComparer.OrdinalIgnoreCase).Count());
+    }
+
     private static async Task<(ServiceProvider Provider, string CsvPath)> CreateWorkspaceAndCsvAsync(string content)
     {
         string directory = Path.Combine(Path.GetTempPath(), "CSVForge.Tests", Guid.NewGuid().ToString("N"));

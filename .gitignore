@@ -1,0 +1,32 @@
+# Build outputs
+bin/
+obj/
+out/
+publish/
+TestResults/
+
+# User and IDE files
+.vs/
+.vscode/
+*.user
+*.suo
+*.rsuser
+
+# .NET artifacts
+*.nupkg
+*.snupkg
+coverage/
+*.coverage
+*.coveragexml
+
+# Runtime data
+*.db
+*.db-shm
+*.db-wal
+*.sqlite
+*.sqlite3
+*.log
+
+# OS files
+Thumbs.db
+Desktop.ini

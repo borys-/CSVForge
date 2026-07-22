@@ -47,6 +47,9 @@ public sealed class SqliteDatasetComparerTests
         Assert.Contains(page.Rows, row => row["Email"] == "a@example.com" && row["compare_status"] == "common");
         Assert.Contains(page.Rows, row => row["Email"] == "b@example.com" && row["compare_status"] == "left_only");
         Assert.Contains(page.Rows, row => row["Email"] == "c@example.com" && row["compare_status"] == "right_only");
+        Assert.Contains("common: 1", result.Message);
+        Assert.Contains("left_only: 1", result.Message);
+        Assert.Contains("right_only: 1", result.Message);
 
         await using SqliteConnection connection = new($"Data Source={workspacePath}");
         await connection.OpenAsync();

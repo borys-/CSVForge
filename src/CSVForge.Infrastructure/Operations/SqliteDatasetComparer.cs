@@ -30,10 +30,12 @@ internal sealed class SqliteDatasetComparer(IWorkspaceContext workspaceContext) 
         command.CommandText = BuildSql(request, resultTableName);
         await command.ExecuteNonQueryAsync(cancellationToken);
 
-        long rowCount = await CountRowsAsync(connection, resultTableName, cancellationToken);
-        await SaveOperationAsync(connection, resultTableName, $"Compare produced {rowCount} rows.", cancellationToken);
-
-        return OperationResult.Ok(resultTableName, $"Porównanie zwróciło {rowCount} wierszy.");
+        IReadOnlyDictionary<string, long> counts = await CountStatusesAsync(connection, resultTableName, cancellationToken);
+        long rowCount = counts.Values.Sum();
+        string details = string.Join(", ", counts.OrderBy(item => item.Key).Select(item => $"{item.Key}: {item.Value}"));
+        string message = $"Porównanie zwróciło {rowCount} wierszy ({details}).";
+        await SaveOperationAsync(connection, resultTableName, message, cancellationToken);
+        return OperationResult.Ok(resultTableName, message);
     }
 
     private static string BuildSql(DatasetCompareRequest request, string resultTableName)
@@ -103,11 +105,17 @@ internal sealed class SqliteDatasetComparer(IWorkspaceContext workspaceContext) 
         return string.Join(" AND ", columns.Select(column => $"{alias}.{CsvImportNameHelper.QuoteIdentifier(column)} IS NULL"));
     }
 
-    private static async Task<long> CountRowsAsync(SqliteConnection connection, string tableName, CancellationToken cancellationToken)
+    private static async Task<IReadOnlyDictionary<string, long>> CountStatusesAsync(SqliteConnection connection, string tableName, CancellationToken cancellationToken)
     {
         await using SqliteCommand command = connection.CreateCommand();
-        command.CommandText = $"SELECT COUNT(*) FROM {CsvImportNameHelper.QuoteIdentifier(tableName)};";
-        return (long)(await command.ExecuteScalarAsync(cancellationToken) ?? 0L);
+        command.CommandText = $"SELECT compare_status, COUNT(*) FROM {CsvImportNameHelper.QuoteIdentifier(tableName)} GROUP BY compare_status;";
+        Dictionary<string, long> counts = new(StringComparer.OrdinalIgnoreCase);
+        await using SqliteDataReader reader = await command.ExecuteReaderAsync(cancellationToken);
+        while (await reader.ReadAsync(cancellationToken))
+        {
+            counts[reader.GetString(0)] = reader.GetInt64(1);
+        }
+        return counts;
     }
 
     private static async Task SaveOperationAsync(SqliteConnection connection, string resultTableName, string message, CancellationToken cancellationToken)

@@ -10,8 +10,6 @@ namespace CSVForge.Infrastructure.Csv;
 
 internal sealed class CsvReaderService : ICsvReader
 {
-    private static readonly char[] CandidateDelimiters = [';', ',', '\t'];
-
     public async Task<CsvPreview> PreviewAsync(ImportRequest request, int rowLimit, CancellationToken cancellationToken)
     {
         if (!File.Exists(request.FilePath))
@@ -22,7 +20,7 @@ internal sealed class CsvReaderService : ICsvReader
         Encoding.RegisterProvider(CodePagesEncodingProvider.Instance);
 
         Encoding encoding = ResolveEncoding(request);
-        char delimiter = request.Delimiter ?? await DetectDelimiterAsync(request.FilePath, encoding, cancellationToken);
+        char delimiter = request.Delimiter ?? await CsvImportNameHelper.DetectDelimiterAsync(request.FilePath, encoding, cancellationToken);
 
         await using FileStream stream = File.OpenRead(request.FilePath);
         using StreamReader reader = new(stream, encoding, detectEncodingFromByteOrderMarks: true);
@@ -84,87 +82,20 @@ internal sealed class CsvReaderService : ICsvReader
         return Encoding.GetEncoding(request.EncodingName);
     }
 
-    private static async Task<char> DetectDelimiterAsync(string filePath, Encoding encoding, CancellationToken cancellationToken)
-    {
-        await using FileStream stream = File.OpenRead(filePath);
-        using StreamReader reader = new(stream, encoding, detectEncodingFromByteOrderMarks: true);
-
-        string sample = string.Empty;
-        for (int i = 0; i < 5; i++)
-        {
-            string? line = await reader.ReadLineAsync(cancellationToken);
-            if (line is null)
-            {
-                break;
-            }
-
-            sample += line;
-        }
-
-        return CandidateDelimiters
-            .Select(delimiter => new { Delimiter = delimiter, Count = sample.Count(character => character == delimiter) })
-            .OrderByDescending(candidate => candidate.Count)
-            .FirstOrDefault(candidate => candidate.Count > 0)
-            ?.Delimiter ?? ',';
-    }
-
     private static IReadOnlyList<CsvColumn> CreateColumns(IReadOnlyList<string> headers)
     {
-        Dictionary<string, int> seenNames = new(StringComparer.OrdinalIgnoreCase);
-        List<CsvColumn> columns = [];
-
-        for (int i = 0; i < headers.Count; i++)
-        {
-            string originalName = string.IsNullOrWhiteSpace(headers[i]) ? $"Column{i + 1}" : headers[i];
-            string normalizedName = NormalizeColumnName(originalName);
-            string uniqueName = MakeUnique(normalizedName, seenNames);
-
-            columns.Add(new CsvColumn(originalName, uniqueName, i));
-        }
-
-        return columns;
+        IReadOnlyList<string> normalizedNames = CsvImportNameHelper.NormalizeColumns(headers);
+        return headers.Select((header, index) => new CsvColumn(
+                string.IsNullOrWhiteSpace(header) ? $"Column{index + 1}" : header,
+                normalizedNames[index],
+                index))
+            .ToArray();
     }
 
     private static IReadOnlyList<CsvColumn> CreateGeneratedColumns(int count)
     {
-        return Enumerable.Range(1, count)
-            .Select(index => new CsvColumn($"Column{index}", $"Column{index}", index - 1))
+        return CsvImportNameHelper.GenerateColumns(count)
+            .Select((name, index) => new CsvColumn(name, name, index))
             .ToArray();
-    }
-
-    private static string NormalizeColumnName(string value)
-    {
-        StringBuilder builder = new();
-
-        foreach (char character in value.Trim())
-        {
-            builder.Append(char.IsLetterOrDigit(character) ? character : '_');
-        }
-
-        string normalized = builder.ToString().Trim('_');
-        if (string.IsNullOrWhiteSpace(normalized))
-        {
-            normalized = "Column";
-        }
-
-        if (char.IsDigit(normalized[0]))
-        {
-            normalized = $"Column_{normalized}";
-        }
-
-        return normalized;
-    }
-
-    private static string MakeUnique(string name, IDictionary<string, int> seenNames)
-    {
-        if (!seenNames.TryGetValue(name, out int count))
-        {
-            seenNames[name] = 1;
-            return name;
-        }
-
-        count++;
-        seenNames[name] = count;
-        return $"{name}_{count}";
     }
 }

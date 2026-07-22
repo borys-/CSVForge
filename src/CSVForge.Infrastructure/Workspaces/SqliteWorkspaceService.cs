@@ -6,7 +6,7 @@ using Microsoft.Data.Sqlite;
 
 namespace CSVForge.Infrastructure.Workspaces;
 
-internal sealed class SqliteWorkspaceService : IWorkspaceService
+internal sealed class SqliteWorkspaceService(IWorkspaceContext workspaceContext) : IWorkspaceService
 {
     public async Task<Workspace> CreateAsync(string workspacePath, CancellationToken cancellationToken)
     {
@@ -19,6 +19,7 @@ internal sealed class SqliteWorkspaceService : IWorkspaceService
 
         Workspace workspace = CreateWorkspace(fullPath);
         await UpsertWorkspaceInfoAsync(connection, workspace, cancellationToken);
+        workspaceContext.SetCurrentWorkspace(fullPath);
 
         return workspace;
     }
@@ -36,13 +37,46 @@ internal sealed class SqliteWorkspaceService : IWorkspaceService
         await connection.OpenAsync(cancellationToken);
         await SqliteWorkspaceMigrator.MigrateAsync(connection, cancellationToken);
 
-        return await ReadWorkspaceAsync(connection, fullPath, cancellationToken) ?? CreateWorkspace(fullPath);
+        Workspace workspace = await ReadWorkspaceAsync(connection, fullPath, cancellationToken) ?? CreateWorkspace(fullPath);
+        workspaceContext.SetCurrentWorkspace(fullPath);
+
+        return workspace;
     }
 
     public async Task<IReadOnlyList<CsvImport>> ListImportsAsync(CancellationToken cancellationToken)
     {
-        await Task.CompletedTask;
-        return Array.Empty<CsvImport>();
+        if (workspaceContext.CurrentWorkspacePath is null)
+        {
+            return Array.Empty<CsvImport>();
+        }
+
+        await using SqliteConnection connection = SqliteConnectionFactory.Create(workspaceContext.CurrentWorkspacePath);
+        await connection.OpenAsync(cancellationToken);
+
+        const string sql = """
+            SELECT id, display_name, source_path, table_name, imported_at, row_count
+            FROM _workspace_imports
+            ORDER BY imported_at DESC;
+            """;
+
+        await using SqliteCommand command = connection.CreateCommand();
+        command.CommandText = sql;
+
+        List<CsvImport> imports = [];
+        await using SqliteDataReader reader = await command.ExecuteReaderAsync(cancellationToken);
+        while (await reader.ReadAsync(cancellationToken))
+        {
+            imports.Add(new CsvImport(
+                Guid.Parse(reader.GetString(0)),
+                reader.GetString(1),
+                reader.GetString(2),
+                reader.GetString(3),
+                DateTimeOffset.Parse(reader.GetString(4)),
+                reader.GetInt64(5),
+                Array.Empty<CsvColumn>()));
+        }
+
+        return imports;
     }
 
     private static string NormalizeWorkspacePath(string workspacePath)

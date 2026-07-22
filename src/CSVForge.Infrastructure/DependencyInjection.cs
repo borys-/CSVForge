@@ -9,8 +9,10 @@ public static class DependencyInjection
 {
     public static IServiceCollection AddInfrastructure(this IServiceCollection services)
     {
+        services.AddSingleton<IWorkspaceContext, WorkspaceContext>();
         services.AddSingleton<IWorkspaceService, SqliteWorkspaceService>();
         services.AddSingleton<ICsvReader, CsvReaderService>();
+        services.AddSingleton<ICsvImporter, CsvImporterService>();
 
         return services;
     }

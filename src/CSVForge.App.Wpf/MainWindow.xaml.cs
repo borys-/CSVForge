@@ -1,5 +1,6 @@
 using System.Collections.ObjectModel;
 using System.IO;
+using System.Text.Json;
 using CSVForge.Application.Abstractions;
 using CSVForge.Application.Export;
 using CSVForge.Application.Operations;
@@ -16,6 +17,8 @@ namespace CSVForge.App.Wpf;
 public partial class MainWindow : Window
 {
     private const int PageSize = 200;
+    private static readonly string RecentWorkspacesPath = Path.Combine(
+        Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "CSVForge", "recent-workspaces.json");
 
     private readonly ICreateWorkspaceUseCase _createWorkspace;
     private readonly IOpenWorkspaceUseCase _openWorkspace;
@@ -64,6 +67,7 @@ public partial class MainWindow : Window
         _deleteImport = deleteImport;
 
         InitializeComponent();
+        LoadRecentWorkspaces();
     }
 
     private async void OpenWorkspace_Click(object sender, RoutedEventArgs e)
@@ -87,6 +91,7 @@ public partial class MainWindow : Window
             }
 
             WorkspaceStatusText.Text = path;
+            SaveRecentWorkspace(path);
             await RefreshImportsAsync();
             await RefreshOperationsAsync();
         }, "Workspace gotowy");
@@ -439,5 +444,41 @@ public partial class MainWindow : Window
     private void CancelOperation_Click(object sender, RoutedEventArgs e)
     {
         _operationCancellation?.Cancel();
+    }
+
+    private void LoadRecentWorkspaces()
+    {
+        try
+        {
+            if (!File.Exists(RecentWorkspacesPath))
+            {
+                return;
+            }
+
+            string[] paths = JsonSerializer.Deserialize<string[]>(File.ReadAllText(RecentWorkspacesPath)) ?? [];
+            WorkspacePathTextBox.ItemsSource = paths.Where(File.Exists).ToArray();
+            if (WorkspacePathTextBox.Items.Count > 0)
+            {
+                WorkspacePathTextBox.SelectedIndex = 0;
+            }
+        }
+        catch (JsonException)
+        {
+            WorkspacePathTextBox.ItemsSource = null;
+        }
+    }
+
+    private void SaveRecentWorkspace(string path)
+    {
+        string fullPath = Path.GetFullPath(path);
+        string[] existing = (WorkspacePathTextBox.ItemsSource as IEnumerable<string> ?? [])
+            .Where(item => !string.Equals(item, fullPath, StringComparison.OrdinalIgnoreCase))
+            .Prepend(fullPath)
+            .Take(10)
+            .ToArray();
+        Directory.CreateDirectory(Path.GetDirectoryName(RecentWorkspacesPath)!);
+        File.WriteAllText(RecentWorkspacesPath, JsonSerializer.Serialize(existing));
+        WorkspacePathTextBox.ItemsSource = existing;
+        WorkspacePathTextBox.Text = fullPath;
     }
 }

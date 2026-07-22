@@ -42,7 +42,7 @@
                     </Grid.ColumnDefinitions>
 
                     <TextBlock Text="Workspace" VerticalAlignment="Center" FontWeight="SemiBold" />
-                    <TextBox x:Name="WorkspacePathTextBox" Grid.Column="1" Height="32" Margin="8,0" VerticalContentAlignment="Center" />
+                    <ComboBox x:Name="WorkspacePathTextBox" Grid.Column="1" Height="32" Margin="8,0" IsEditable="True" VerticalContentAlignment="Center" />
                     <Button Grid.Column="2" Content="Utwórz / otwórz" Height="32" MinWidth="120" Padding="12,0" Click="OpenWorkspace_Click" />
 
                     <TextBlock Grid.Row="1" Text="CSV" VerticalAlignment="Center" FontWeight="SemiBold" Margin="0,10,0,0" />

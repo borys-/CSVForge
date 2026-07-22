@@ -19,6 +19,10 @@ internal sealed class SqliteDatasetComparer(IWorkspaceContext workspaceContext) 
         {
             throw new ArgumentException("Compare keys must be non-empty and have the same number of columns.", nameof(request));
         }
+        SqliteIdentifierGuard.Table(request.LeftTableName);
+        SqliteIdentifierGuard.Table(request.RightTableName);
+        SqliteIdentifierGuard.Columns(request.LeftKeyColumns);
+        SqliteIdentifierGuard.Columns(request.RightKeyColumns);
 
         await using SqliteConnection connection = SqliteConnectionFactory.Create(workspaceContext.CurrentWorkspacePath);
         await connection.OpenAsync(cancellationToken);

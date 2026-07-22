@@ -20,6 +20,7 @@ internal sealed class SqliteTableExporter(IWorkspaceContext workspaceContext) : 
         {
             throw new ArgumentException("Output path is required.", nameof(request));
         }
+        SqliteIdentifierGuard.Table(request.TableName);
 
         string? directory = Path.GetDirectoryName(Path.GetFullPath(request.OutputPath));
         if (directory is null || !Directory.Exists(directory))

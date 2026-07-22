@@ -16,6 +16,12 @@ internal sealed class SqliteDatasetJoiner(IWorkspaceContext workspaceContext) : 
         }
 
         Validate(request);
+        SqliteIdentifierGuard.Table(request.LeftTableName);
+        SqliteIdentifierGuard.Table(request.RightTableName);
+        SqliteIdentifierGuard.Columns(request.LeftJoinColumns);
+        SqliteIdentifierGuard.Columns(request.RightJoinColumns);
+        SqliteIdentifierGuard.Columns(request.LeftOutputColumns);
+        SqliteIdentifierGuard.Columns(request.RightOutputColumns);
         await using SqliteConnection connection = SqliteConnectionFactory.Create(workspaceContext.CurrentWorkspacePath);
         await connection.OpenAsync(cancellationToken);
         await SqliteIndexHelper.EnsureAsync(connection, request.LeftTableName, request.LeftJoinColumns, cancellationToken);

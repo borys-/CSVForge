@@ -10,6 +10,18 @@ namespace CSVForge.Tests.Infrastructure;
 public sealed class SqliteTableBrowserTests
 {
     [Fact]
+    public async Task BrowseTableUseCase_RejectsUnsafeTableIdentifier()
+    {
+        string directory = Path.Combine(Path.GetTempPath(), "CSVForge.Tests", Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(directory);
+        ServiceProvider provider = new ServiceCollection().AddApplication().AddInfrastructure().BuildServiceProvider();
+        await provider.GetRequiredService<ICreateWorkspaceUseCase>().ExecuteAsync(Path.Combine(directory, "workspace.db"));
+
+        await Assert.ThrowsAsync<ArgumentException>(() => provider.GetRequiredService<IBrowseTableUseCase>()
+            .ExecuteAsync(new BrowseTableRequest("people;DROP_TABLE", 10, 0, null, false, null)));
+    }
+
+    [Fact]
     public async Task BrowseTableUseCase_ReturnsPagedRowsAndMetadata()
     {
         string directory = Path.Combine(Path.GetTempPath(), "CSVForge.Tests", Guid.NewGuid().ToString("N"));

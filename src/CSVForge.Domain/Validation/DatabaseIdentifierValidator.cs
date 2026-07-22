@@ -43,6 +43,6 @@ public static partial class DatabaseIdentifierValidator
         }
     }
 
-    [GeneratedRegex(@"^[A-Za-z_][A-Za-z0-9_]*$")]
+    [GeneratedRegex(@"^[\p{L}_][\p{L}\p{N}_]*$")]
     private static partial Regex IdentifierPattern();
 }

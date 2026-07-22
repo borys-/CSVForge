@@ -8,6 +8,7 @@ public sealed class DatabaseIdentifierValidatorTests
     [InlineData("customers")]
     [InlineData("_workspace_imports")]
     [InlineData("Column_123")]
+    [InlineData("Zażółć")]
     public void IsValidTableName_ReturnsTrue_ForSafeIdentifiers(string value)
     {
         Assert.True(DatabaseIdentifierValidator.IsValidTableName(value));
@@ -28,5 +29,11 @@ public sealed class DatabaseIdentifierValidatorTests
     public void EnsureValidColumnName_Throws_ForInvalidIdentifier()
     {
         Assert.Throws<ArgumentException>(() => DatabaseIdentifierValidator.EnsureValidColumnName("bad column"));
+    }
+
+    [Fact]
+    public void EnsureValidTableName_Throws_ForSqlFragment()
+    {
+        Assert.Throws<ArgumentException>(() => DatabaseIdentifierValidator.EnsureValidTableName("people;DROP_TABLE"));
     }
 }

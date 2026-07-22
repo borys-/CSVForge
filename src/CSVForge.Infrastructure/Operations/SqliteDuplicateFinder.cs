@@ -19,6 +19,8 @@ internal sealed class SqliteDuplicateFinder(IWorkspaceContext workspaceContext) 
         {
             throw new ArgumentException("At least one key column is required.", nameof(request));
         }
+        SqliteIdentifierGuard.Table(request.TableName);
+        SqliteIdentifierGuard.Columns(request.KeyColumns);
 
         await using SqliteConnection connection = SqliteConnectionFactory.Create(workspaceContext.CurrentWorkspacePath);
         await connection.OpenAsync(cancellationToken);

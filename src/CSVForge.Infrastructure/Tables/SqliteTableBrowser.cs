@@ -14,6 +14,7 @@ internal sealed class SqliteTableBrowser(IWorkspaceContext workspaceContext) : I
         {
             throw new InvalidOperationException("Open or create a workspace before browsing tables.");
         }
+        SqliteIdentifierGuard.Table(request.TableName);
 
         if (request.Limit <= 0)
         {

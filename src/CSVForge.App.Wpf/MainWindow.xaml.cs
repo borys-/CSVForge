@@ -13,6 +13,7 @@ using CSVForge.Domain.Operations;
 using Microsoft.Win32;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Data;
 using Microsoft.Data.Sqlite;
 
 namespace CSVForge.App.Wpf;
@@ -155,7 +156,7 @@ public partial class MainWindow : Window
             List<Dictionary<string, string?>> rows = preview.Rows.Select(row => preview.Columns
                 .Select((column, index) => new { column.Name, Value = index < row.Count ? row[index] : null })
                 .ToDictionary(item => item.Name, item => item.Value)).ToList();
-            DataGrid.ItemsSource = rows;
+            ShowRows(preview.Columns.Select(column => column.Name), rows);
             TableTitleText.Text = $"Podgląd: {Path.GetFileName(path)} ({preview.Rows.Count} wierszy)";
             PageStatusText.Text = preview.Errors.Count == 0 ? "CSV poprawny" : $"Błędy: {preview.Errors.Count}";
         }, "Podgląd gotowy");
@@ -464,7 +465,7 @@ public partial class MainWindow : Window
 
             string title = _adHocTableName is null ? _selectedImport!.DisplayName : "Wynik operacji";
             TableTitleText.Text = $"{title} ({page.TotalRows} wierszy)";
-            DataGrid.ItemsSource = ToRows(page);
+            ShowRows(page.Columns, ToRows(page));
             _totalRows = page.TotalRows;
             PreviousPageButton.IsEnabled = _pageOffset > 0;
             NextPageButton.IsEnabled = _pageOffset + page.Rows.Count < page.TotalRows;
@@ -483,6 +484,26 @@ public partial class MainWindow : Window
         }
 
         return rows;
+    }
+
+    private void ShowRows(IEnumerable<string> columns, IEnumerable<Dictionary<string, string?>> rows)
+    {
+        DataGrid.ItemsSource = null;
+        DataGrid.Columns.Clear();
+
+        foreach (string column in columns)
+        {
+            DataGrid.Columns.Add(new DataGridTextColumn
+            {
+                Header = column,
+                SortMemberPath = column,
+                Binding = new Binding($"[{column}]") { Mode = BindingMode.OneWay },
+                MinWidth = 100,
+                MaxWidth = 600
+            });
+        }
+
+        DataGrid.ItemsSource = rows;
     }
 
     private IReadOnlyList<string> SelectedKeyColumns()

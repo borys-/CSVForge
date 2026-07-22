@@ -180,7 +180,7 @@
                             </Grid>
                         </Grid>
                         <DataGrid x:Name="DataGrid"
-                                  AutoGenerateColumns="True"
+                                  AutoGenerateColumns="False"
                                   IsReadOnly="True"
                                   CanUserAddRows="False"
                                   CanUserDeleteRows="False"

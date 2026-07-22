@@ -1,4 +1,5 @@
 using System.Collections.ObjectModel;
+using System.ComponentModel;
 using System.Diagnostics;
 using System.IO;
 using System.Text.Json;
@@ -40,6 +41,8 @@ public partial class MainWindow : Window
     private string? _adHocTableName;
     private int _pageOffset;
     private long _totalRows;
+    private string? _sortColumn;
+    private bool _sortDescending;
     private CancellationTokenSource? _operationCancellation;
 
     public MainWindow(
@@ -163,6 +166,8 @@ public partial class MainWindow : Window
         _selectedImport = ImportsListBox.SelectedItem as CsvImport;
         _adHocTableName = null;
         _pageOffset = 0;
+        _sortColumn = null;
+        _sortDescending = false;
         ImportNameTextBox.Text = _selectedImport?.DisplayName ?? string.Empty;
         DuplicateColumnComboBox.ItemsSource = _selectedImport?.Columns.Select(column => column.Name).ToArray();
         DuplicateColumnComboBox.SelectedIndex = DuplicateColumnComboBox.Items.Count > 0 ? 0 : -1;
@@ -173,6 +178,30 @@ public partial class MainWindow : Window
     private async void RefreshTable_Click(object sender, RoutedEventArgs e)
     {
         _pageOffset = 0;
+        await RefreshSelectedTableAsync();
+    }
+
+    private async void DataGrid_Sorting(object sender, DataGridSortingEventArgs e)
+    {
+        e.Handled = true;
+        string column = e.Column.SortMemberPath;
+        if (string.IsNullOrWhiteSpace(column))
+        {
+            column = e.Column.Header?.ToString() ?? string.Empty;
+        }
+        if (string.IsNullOrWhiteSpace(column))
+        {
+            return;
+        }
+
+        _sortDescending = string.Equals(_sortColumn, column, StringComparison.OrdinalIgnoreCase) && !_sortDescending;
+        _sortColumn = column;
+        _pageOffset = 0;
+        foreach (DataGridColumn gridColumn in DataGrid.Columns)
+        {
+            gridColumn.SortDirection = null;
+        }
+        e.Column.SortDirection = _sortDescending ? ListSortDirection.Descending : ListSortDirection.Ascending;
         await RefreshSelectedTableAsync();
     }
 
@@ -429,8 +458,8 @@ public partial class MainWindow : Window
                 tableName,
                 PageSize,
                 _pageOffset,
-                null,
-                false,
+                _sortColumn,
+                _sortDescending,
                 FilterTextBox.Text.Trim()));
 
             string title = _adHocTableName is null ? _selectedImport!.DisplayName : "Wynik operacji";

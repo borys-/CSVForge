@@ -182,6 +182,7 @@
                                   CanUserDeleteRows="False"
                                   GridLinesVisibility="Horizontal"
                                   HeadersVisibility="Column"
+                                  Sorting="DataGrid_Sorting"
                                   EnableRowVirtualization="True"
                                   EnableColumnVirtualization="True" />
                     </DockPanel>

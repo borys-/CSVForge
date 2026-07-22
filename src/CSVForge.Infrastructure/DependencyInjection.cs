@@ -1,5 +1,6 @@
 using CSVForge.Application.Ports;
 using CSVForge.Infrastructure.Csv;
+using CSVForge.Infrastructure.Tables;
 using CSVForge.Infrastructure.Workspaces;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -13,6 +14,7 @@ public static class DependencyInjection
         services.AddSingleton<IWorkspaceService, SqliteWorkspaceService>();
         services.AddSingleton<ICsvReader, CsvReaderService>();
         services.AddSingleton<ICsvImporter, CsvImporterService>();
+        services.AddSingleton<ITableBrowser, SqliteTableBrowser>();
 
         return services;
     }

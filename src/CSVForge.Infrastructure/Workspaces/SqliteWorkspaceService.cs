@@ -66,14 +66,15 @@ internal sealed class SqliteWorkspaceService(IWorkspaceContext workspaceContext)
         await using SqliteDataReader reader = await command.ExecuteReaderAsync(cancellationToken);
         while (await reader.ReadAsync(cancellationToken))
         {
+            Guid importId = Guid.Parse(reader.GetString(0));
             imports.Add(new CsvImport(
-                Guid.Parse(reader.GetString(0)),
+                importId,
                 reader.GetString(1),
                 reader.GetString(2),
                 reader.GetString(3),
                 DateTimeOffset.Parse(reader.GetString(4)),
                 reader.GetInt64(5),
-                Array.Empty<CsvColumn>()));
+                await ReadColumnsAsync(connection, importId, cancellationToken)));
         }
 
         return imports;
@@ -131,5 +132,26 @@ internal sealed class SqliteWorkspaceService(IWorkspaceContext workspaceContext)
         string name = reader.GetString(0);
         DateTimeOffset createdAt = DateTimeOffset.Parse(reader.GetString(1));
         return new Workspace(fullPath, name, createdAt);
+    }
+
+    private static async Task<IReadOnlyList<CsvColumn>> ReadColumnsAsync(SqliteConnection connection, Guid importId, CancellationToken cancellationToken)
+    {
+        await using SqliteCommand command = connection.CreateCommand();
+        command.CommandText = """
+            SELECT original_name, name, column_index
+            FROM _workspace_columns
+            WHERE import_id = $importId
+            ORDER BY column_index;
+            """;
+        command.Parameters.AddWithValue("$importId", importId.ToString());
+
+        List<CsvColumn> columns = [];
+        await using SqliteDataReader reader = await command.ExecuteReaderAsync(cancellationToken);
+        while (await reader.ReadAsync(cancellationToken))
+        {
+            columns.Add(new CsvColumn(reader.GetString(0), reader.GetString(1), reader.GetInt32(2)));
+        }
+
+        return columns;
     }
 }

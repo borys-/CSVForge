@@ -36,4 +36,28 @@ public sealed class SqliteTableExporterTests
         Assert.Contains("2,\"Kowalski, Jan\"", content);
         Assert.Contains("Łukasz", content);
     }
+
+    [Fact]
+    public async Task ExportTableUseCase_CancellationPreservesExistingOutput()
+    {
+        string directory = Path.Combine(Path.GetTempPath(), "CSVForge.Tests", Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(directory);
+        string workspacePath = Path.Combine(directory, "workspace.db");
+        string inputPath = Path.Combine(directory, "input.csv");
+        string outputPath = Path.Combine(directory, "output.csv");
+        await File.WriteAllTextAsync(inputPath, "Id\r\n1\r\n");
+        await File.WriteAllTextAsync(outputPath, "existing");
+        ServiceProvider provider = new ServiceCollection().AddApplication().AddInfrastructure().BuildServiceProvider();
+        await provider.GetRequiredService<ICreateWorkspaceUseCase>().ExecuteAsync(workspacePath);
+        ImportResult import = await provider.GetRequiredService<IImportCsvUseCase>()
+            .ExecuteAsync(new ImportRequest(inputPath, "Input", true, null, null));
+        using CancellationTokenSource cancellation = new();
+        cancellation.Cancel();
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => provider.GetRequiredService<IExportTableUseCase>()
+            .ExecuteAsync(new ExportTableRequest(import.Import.TableName, outputPath, ';', true), cancellation.Token));
+
+        Assert.Equal("existing", await File.ReadAllTextAsync(outputPath));
+        Assert.Empty(Directory.GetFiles(directory, "*.tmp"));
+    }
 }

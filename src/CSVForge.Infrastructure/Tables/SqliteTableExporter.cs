@@ -27,20 +27,34 @@ internal sealed class SqliteTableExporter(IWorkspaceContext workspaceContext) : 
             throw new DirectoryNotFoundException($"Output directory '{directory}' does not exist.");
         }
 
-        await using SqliteConnection connection = SqliteConnectionFactory.Create(workspaceContext.CurrentWorkspacePath);
-        await connection.OpenAsync(cancellationToken);
+        string outputPath = Path.GetFullPath(request.OutputPath);
+        string temporaryPath = $"{outputPath}.{Guid.NewGuid():N}.tmp";
+        try
+        {
+            long exportedRows = await WriteTemporaryFileAsync(workspaceContext.CurrentWorkspacePath, request, temporaryPath, cancellationToken);
+            File.Move(temporaryPath, outputPath, overwrite: true);
+            return new ExportResult(outputPath, exportedRows);
+        }
+        catch
+        {
+            File.Delete(temporaryPath);
+            throw;
+        }
+    }
 
+    private static async Task<long> WriteTemporaryFileAsync(string workspacePath, ExportTableRequest request, string temporaryPath, CancellationToken cancellationToken)
+    {
+        await using SqliteConnection connection = SqliteConnectionFactory.Create(workspacePath);
+        await connection.OpenAsync(cancellationToken);
         await using SqliteCommand command = connection.CreateCommand();
         command.CommandText = $"SELECT * FROM {CsvImportNameHelper.QuoteIdentifier(request.TableName)};";
         await using SqliteDataReader reader = await command.ExecuteReaderAsync(cancellationToken);
-
-        await using StreamWriter writer = new(request.OutputPath, false, new UTF8Encoding(encoderShouldEmitUTF8Identifier: true));
+        await using StreamWriter writer = new(temporaryPath, false, new UTF8Encoding(encoderShouldEmitUTF8Identifier: true));
         string delimiter = request.Delimiter.ToString();
 
         if (request.IncludeHeader)
         {
-            string header = string.Join(delimiter, Enumerable.Range(0, reader.FieldCount)
-                .Select(index => Escape(reader.GetName(index), request.Delimiter)));
+            string header = string.Join(delimiter, Enumerable.Range(0, reader.FieldCount).Select(index => Escape(reader.GetName(index), request.Delimiter)));
             await writer.WriteLineAsync(header.AsMemory(), cancellationToken);
         }
 
@@ -53,7 +67,7 @@ internal sealed class SqliteTableExporter(IWorkspaceContext workspaceContext) : 
             exportedRows++;
         }
 
-        return new ExportResult(request.OutputPath, exportedRows);
+        return exportedRows;
     }
 
     private static string Escape(string value, char delimiter)

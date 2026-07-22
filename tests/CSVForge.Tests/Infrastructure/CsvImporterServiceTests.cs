@@ -204,6 +204,51 @@ public sealed class CsvImporterServiceTests
         Assert.Empty(result.Errors);
     }
 
+    [Fact]
+    public async Task ImportCsvUseCase_AppliesColumnNamesTypesAndSelection()
+    {
+        (ServiceProvider provider, string csvPath) = await CreateWorkspaceAndCsvAsync(
+            "Name;Age;Price;Active;Ignored\r\nAda;42;12,50;tak;x\r\nOla;7;3,25;nie;y\r\n");
+        CsvColumnMapping[] mappings =
+        [
+            new(0, "Customer", CsvColumnDataType.Text),
+            new(1, "Years", CsvColumnDataType.Integer),
+            new(2, "Amount", CsvColumnDataType.Decimal),
+            new(3, "Enabled", CsvColumnDataType.Boolean),
+            new(4, "Ignored", CsvColumnDataType.Text, Include: false)
+        ];
+
+        ImportResult result = await provider.GetRequiredService<IImportCsvUseCase>()
+            .ExecuteAsync(new ImportRequest(csvPath, "Typed", true, null, null, 500, false, mappings));
+
+        Assert.Equal(2, result.Import.RowCount);
+        Assert.Equal(["Customer", "Years", "Amount", "Enabled"], result.Import.Columns.Select(column => column.Name));
+        Assert.Empty(result.Errors);
+
+        string workspacePath = provider.GetRequiredService<CSVForge.Application.Ports.IWorkspaceContext>().CurrentWorkspacePath!;
+        await using SqliteConnection connection = new($"Data Source={workspacePath}");
+        await connection.OpenAsync();
+        await using SqliteCommand schemaCommand = connection.CreateCommand();
+        schemaCommand.CommandText = $"PRAGMA table_info(\"{result.Import.TableName}\");";
+        List<(string Name, string Type)> schema = [];
+        await using (SqliteDataReader reader = await schemaCommand.ExecuteReaderAsync())
+        {
+            while (await reader.ReadAsync())
+            {
+                schema.Add((reader.GetString(1), reader.GetString(2)));
+            }
+        }
+
+        Assert.Equal([("Customer", "TEXT"), ("Years", "INTEGER"), ("Amount", "REAL"), ("Enabled", "INTEGER")], schema);
+        await using SqliteCommand valueCommand = connection.CreateCommand();
+        valueCommand.CommandText = $"SELECT Years, Amount, Enabled FROM \"{result.Import.TableName}\" WHERE Customer = 'Ada';";
+        await using SqliteDataReader valueReader = await valueCommand.ExecuteReaderAsync();
+        Assert.True(await valueReader.ReadAsync());
+        Assert.Equal(42L, valueReader.GetInt64(0));
+        Assert.Equal(12.5, valueReader.GetDouble(1));
+        Assert.Equal(1L, valueReader.GetInt64(2));
+    }
+
     private static async Task<(ServiceProvider Provider, string CsvPath)> CreateWorkspaceAndCsvAsync(string content)
     {
         string directory = Path.Combine(Path.GetTempPath(), "CSVForge.Tests", Guid.NewGuid().ToString("N"));

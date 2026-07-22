@@ -1,4 +1,5 @@
 using System.Text;
+using System.Globalization;
 using CSVForge.Application.Export;
 using CSVForge.Application.Ports;
 using CSVForge.Infrastructure.Csv;
@@ -71,7 +72,9 @@ internal sealed class SqliteTableExporter(IWorkspaceContext workspaceContext) : 
         while (await reader.ReadAsync(cancellationToken))
         {
             string row = string.Join(delimiter, Enumerable.Range(0, reader.FieldCount)
-                .Select(index => Escape(reader.IsDBNull(index) ? string.Empty : reader.GetValue(index).ToString() ?? string.Empty, request.Delimiter)));
+                .Select(index => Escape(
+                    reader.IsDBNull(index) ? string.Empty : Convert.ToString(reader.GetValue(index), CultureInfo.InvariantCulture) ?? string.Empty,
+                    request.Delimiter)));
             await writer.WriteLineAsync(row.AsMemory(), cancellationToken);
             exportedRows++;
         }

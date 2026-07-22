@@ -14,6 +14,7 @@ public partial class ImportPreviewWindow : Window
     private readonly IPreviewCsvUseCase _previewCsv;
     private readonly IImportCsvUseCase _importCsv;
     private readonly string _filePath;
+    private readonly ObservableCollection<ColumnSetting> _columnSettings = [];
     private bool _isLoaded;
 
     public ImportPreviewWindow(IPreviewCsvUseCase previewCsv, IImportCsvUseCase importCsv, string filePath)
@@ -25,6 +26,15 @@ public partial class ImportPreviewWindow : Window
         InitializeComponent();
         FileNameText.Text = filePath;
         DisplayNameTextBox.Text = Path.GetFileNameWithoutExtension(filePath);
+        ColumnTypeDataGridColumn.ItemsSource = new[]
+        {
+            new ColumnTypeOption("Tekst", CsvColumnDataType.Text),
+            new ColumnTypeOption("Liczba całkowita", CsvColumnDataType.Integer),
+            new ColumnTypeOption("Liczba dziesiętna", CsvColumnDataType.Decimal),
+            new ColumnTypeOption("Data", CsvColumnDataType.Date),
+            new ColumnTypeOption("Tak / nie", CsvColumnDataType.Boolean)
+        };
+        ColumnSettingsDataGrid.ItemsSource = _columnSettings;
         Loaded += ImportPreviewWindow_Loaded;
     }
 
@@ -94,8 +104,17 @@ public partial class ImportPreviewWindow : Window
 
     private ImportRequest CreateRequest()
     {
+        ColumnSettingsDataGrid.CommitEdit(DataGridEditingUnit.Cell, true);
+        ColumnSettingsDataGrid.CommitEdit(DataGridEditingUnit.Row, true);
         string mode = HeaderModeComboBox.SelectedItem is ComboBoxItem { Tag: string tag } ? tag : "Auto";
-        return new ImportRequest(_filePath, DisplayNameTextBox.Text.Trim(), mode != "No", null, null, 500, mode == "Auto");
+        IReadOnlyList<CsvColumnMapping>? mappings = _columnSettings.Count == 0
+            ? null
+            : _columnSettings.Select(setting => new CsvColumnMapping(
+                setting.SourceIndex,
+                setting.Name,
+                setting.DataType,
+                setting.Include)).ToArray();
+        return new ImportRequest(_filePath, DisplayNameTextBox.Text.Trim(), mode != "No", null, null, 500, mode == "Auto", mappings);
     }
 
     private void ShowPreview(CsvPreview preview)
@@ -127,6 +146,19 @@ public partial class ImportPreviewWindow : Window
         }
 
         PreviewDataGrid.ItemsSource = rows;
+
+        _columnSettings.Clear();
+        foreach (CsvColumn column in preview.Columns)
+        {
+            _columnSettings.Add(new ColumnSetting
+            {
+                SourceIndex = column.Index,
+                SourceName = column.OriginalName,
+                Name = column.Name,
+                DataType = CsvColumnDataType.Text,
+                Include = true
+            });
+        }
     }
 
     private void SetBusy(bool busy, string status)
@@ -136,4 +168,15 @@ public partial class ImportPreviewWindow : Window
         ImportProgressBar.Visibility = busy ? Visibility.Visible : Visibility.Collapsed;
         OperationStatusText.Text = status;
     }
+
+    private sealed class ColumnSetting
+    {
+        public int SourceIndex { get; init; }
+        public string SourceName { get; init; } = string.Empty;
+        public string Name { get; set; } = string.Empty;
+        public CsvColumnDataType DataType { get; set; }
+        public bool Include { get; set; }
+    }
+
+    private sealed record ColumnTypeOption(string Label, CsvColumnDataType Value);
 }

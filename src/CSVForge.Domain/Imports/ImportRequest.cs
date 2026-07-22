@@ -7,4 +7,5 @@ public sealed record ImportRequest(
     char? Delimiter,
     string? EncodingName,
     int BatchSize = 500,
-    bool AutoDetectHeader = false);
+    bool AutoDetectHeader = false,
+    IReadOnlyList<CsvColumnMapping>? ColumnMappings = null);

@@ -36,21 +36,43 @@
             </Grid>
         </Border>
 
-        <Border Grid.Row="2" Background="White" BorderBrush="#D8DEE8" BorderThickness="1" CornerRadius="6" Padding="10">
-            <DockPanel>
-                <Grid DockPanel.Dock="Top" Margin="0,0,0,8">
-                    <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="*" />
-                        <ColumnDefinition Width="Auto" />
-                    </Grid.ColumnDefinitions>
-                    <TextBlock Text="Podgląd pierwszych 100 wierszy" FontWeight="SemiBold" />
-                    <TextBlock x:Name="PreviewStatusText" Grid.Column="1" Foreground="#52606D" />
-                </Grid>
-                <DataGrid x:Name="PreviewDataGrid" AutoGenerateColumns="False" IsReadOnly="True"
-                          CanUserAddRows="False" CanUserDeleteRows="False"
-                          GridLinesVisibility="Horizontal" EnableRowVirtualization="True" EnableColumnVirtualization="True" />
-            </DockPanel>
-        </Border>
+        <Grid Grid.Row="2">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="3*" />
+                <ColumnDefinition Width="2*" MinWidth="330" />
+            </Grid.ColumnDefinitions>
+
+            <Border Background="White" BorderBrush="#D8DEE8" BorderThickness="1" CornerRadius="6" Padding="10">
+                <DockPanel>
+                    <Grid DockPanel.Dock="Top" Margin="0,0,0,8">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+                        <TextBlock Text="Podgląd pierwszych 100 wierszy" FontWeight="SemiBold" />
+                        <TextBlock x:Name="PreviewStatusText" Grid.Column="1" Foreground="#52606D" />
+                    </Grid>
+                    <DataGrid x:Name="PreviewDataGrid" AutoGenerateColumns="False" IsReadOnly="True"
+                              CanUserAddRows="False" CanUserDeleteRows="False"
+                              GridLinesVisibility="Horizontal" EnableRowVirtualization="True" EnableColumnVirtualization="True" />
+                </DockPanel>
+            </Border>
+
+            <Border Grid.Column="1" Margin="12,0,0,0" Background="White" BorderBrush="#D8DEE8" BorderThickness="1" CornerRadius="6" Padding="10">
+                <DockPanel>
+                    <TextBlock DockPanel.Dock="Top" Text="Kolumny do importu" FontWeight="SemiBold" Margin="0,0,0,8" />
+                    <TextBlock DockPanel.Dock="Bottom" Text="Odznacz kolumnę, aby ją pominąć. Nazwy i typy można edytować." Foreground="#52606D" TextWrapping="Wrap" Margin="0,8,0,0" />
+                    <DataGrid x:Name="ColumnSettingsDataGrid" AutoGenerateColumns="False" CanUserAddRows="False" CanUserDeleteRows="False" HeadersVisibility="Column" GridLinesVisibility="Horizontal">
+                        <DataGrid.Columns>
+                            <DataGridCheckBoxColumn Header="Import" Binding="{Binding Include, UpdateSourceTrigger=PropertyChanged}" Width="58" />
+                            <DataGridTextColumn Header="Źródło" Binding="{Binding SourceName}" IsReadOnly="True" Width="*" MinWidth="90" />
+                            <DataGridTextColumn Header="Nazwa" Binding="{Binding Name, UpdateSourceTrigger=PropertyChanged}" Width="*" MinWidth="90" />
+                            <DataGridComboBoxColumn x:Name="ColumnTypeDataGridColumn" Header="Typ" DisplayMemberPath="Label" SelectedValuePath="Value" SelectedValueBinding="{Binding DataType, UpdateSourceTrigger=PropertyChanged}" Width="135" />
+                        </DataGrid.Columns>
+                    </DataGrid>
+                </DockPanel>
+            </Border>
+        </Grid>
 
         <Grid Grid.Row="3" Margin="0,14,0,0">
             <Grid.ColumnDefinitions>

@@ -89,47 +89,34 @@ internal sealed class CsvImporterService(IWorkspaceContext workspaceContext) : I
                 : CsvHeaderDetector.LooksLikeHeader(firstRecord, secondRecord);
         }
 
-        IReadOnlyList<string> originalHeaders = hasHeader
+        IReadOnlyList<string> sourceHeaders = hasHeader
             ? firstRecord
             : CsvImportNameHelper.GenerateColumns(firstRecord.Length);
-        IReadOnlyList<string> columnNames = hasHeader
-            ? CsvImportNameHelper.NormalizeColumns(firstRecord)
-            : originalHeaders;
+        IReadOnlyList<CsvColumnMapping> mappings = ResolveMappings(request.ColumnMappings, sourceHeaders);
+        IReadOnlyList<string> originalHeaders = mappings.Select(mapping => sourceHeaders[mapping.SourceIndex]).ToArray();
+        IReadOnlyList<string> columnNames = CsvImportNameHelper.NormalizeColumns(mappings.Select(mapping => mapping.Name).ToArray());
 
         Guid importId = Guid.NewGuid();
         string tableName = CsvImportNameHelper.CreateTableName(request.DisplayName);
-        await CreateImportTableAsync(connection, tableName, columnNames, cancellationToken);
+        await CreateImportTableAsync(connection, tableName, columnNames, mappings, cancellationToken);
 
         long rowCount = 0;
-        List<string[]> batch = [];
+        List<object?[]> batch = [];
         List<ImportError> errors = [];
         if (!hasHeader)
         {
-            batch.Add(firstRecord);
+            AddRecord(firstRecord, csv.Parser.Row, csv.Parser.RawRecord, sourceHeaders.Count, mappings, batch, errors);
         }
         if (secondRecord is not null)
         {
-            if (secondRecord.Length == columnNames.Count)
-            {
-                batch.Add(secondRecord);
-            }
-            else
-            {
-                errors.Add(new ImportError(csv.Parser.Row, $"Expected {columnNames.Count} fields, found {secondRecord.Length}.", csv.Parser.RawRecord));
-            }
+            AddRecord(secondRecord, csv.Parser.Row, csv.Parser.RawRecord, sourceHeaders.Count, mappings, batch, errors);
         }
 
         while (await csv.ReadAsync())
         {
             cancellationToken.ThrowIfCancellationRequested();
             string[] record = CsvHeaderDetector.TrimTrailingEmptyColumns(csv.Parser.Record ?? [], trailingEmptyColumns);
-            if (record.Length != columnNames.Count)
-            {
-                errors.Add(new ImportError(csv.Parser.Row, $"Expected {columnNames.Count} fields, found {record.Length}.", csv.Parser.RawRecord));
-                continue;
-            }
-
-            batch.Add(record);
+            AddRecord(record, csv.Parser.Row, csv.Parser.RawRecord, sourceHeaders.Count, mappings, batch, errors);
 
             if (batch.Count >= request.BatchSize)
             {
@@ -171,18 +158,24 @@ internal sealed class CsvImporterService(IWorkspaceContext workspaceContext) : I
         };
     }
 
-    private static async Task CreateImportTableAsync(SqliteConnection connection, string tableName, IReadOnlyList<string> columnNames, CancellationToken cancellationToken)
+    private static async Task CreateImportTableAsync(
+        SqliteConnection connection,
+        string tableName,
+        IReadOnlyList<string> columnNames,
+        IReadOnlyList<CsvColumnMapping> mappings,
+        CancellationToken cancellationToken)
     {
-        string columnsSql = string.Join(", ", columnNames.Select(column => $"{CsvImportNameHelper.QuoteIdentifier(column)} TEXT"));
+        string columnsSql = string.Join(", ", columnNames.Select((column, index) =>
+            $"{CsvImportNameHelper.QuoteIdentifier(column)} {SqliteType(mappings[index].DataType)}"));
         await using SqliteCommand command = connection.CreateCommand();
         command.CommandText = $"CREATE TABLE {CsvImportNameHelper.QuoteIdentifier(tableName)} ({columnsSql});";
         await command.ExecuteNonQueryAsync(cancellationToken);
     }
 
-    private static async Task<long> InsertBatchAsync(SqliteConnection connection, string tableName, IReadOnlyList<string> columnNames, IReadOnlyList<string[]> rows, CancellationToken cancellationToken)
+    private static async Task<long> InsertBatchAsync(SqliteConnection connection, string tableName, IReadOnlyList<string> columnNames, IReadOnlyList<object?[]> rows, CancellationToken cancellationToken)
     {
         await using SqliteTransaction transaction = (SqliteTransaction)await connection.BeginTransactionAsync(cancellationToken);
-        foreach (string[] row in rows)
+        foreach (object?[] row in rows)
         {
             await using SqliteCommand command = connection.CreateCommand();
             command.Transaction = transaction;
@@ -190,7 +183,7 @@ internal sealed class CsvImporterService(IWorkspaceContext workspaceContext) : I
 
             for (int i = 0; i < columnNames.Count; i++)
             {
-                command.Parameters.AddWithValue($"$p{i}", i < row.Length ? row[i] : DBNull.Value);
+                command.Parameters.AddWithValue($"$p{i}", row[i] ?? DBNull.Value);
             }
 
             await command.ExecuteNonQueryAsync(cancellationToken);
@@ -199,6 +192,98 @@ internal sealed class CsvImporterService(IWorkspaceContext workspaceContext) : I
         await transaction.CommitAsync(cancellationToken);
         return rows.Count;
     }
+
+    private static IReadOnlyList<CsvColumnMapping> ResolveMappings(
+        IReadOnlyList<CsvColumnMapping>? configuredMappings,
+        IReadOnlyList<string> sourceHeaders)
+    {
+        IReadOnlyList<CsvColumnMapping> mappings = configuredMappings is null
+            ? sourceHeaders.Select((name, index) => new CsvColumnMapping(index, name, CsvColumnDataType.Text)).ToArray()
+            : configuredMappings.Where(mapping => mapping.Include).ToArray();
+
+        if (mappings.Count == 0)
+        {
+            throw new ArgumentException("Select at least one column to import.", nameof(configuredMappings));
+        }
+        if (mappings.Any(mapping => mapping.SourceIndex < 0 || mapping.SourceIndex >= sourceHeaders.Count))
+        {
+            throw new ArgumentException("Column mapping contains an invalid source index.", nameof(configuredMappings));
+        }
+        if (mappings.Any(mapping => string.IsNullOrWhiteSpace(mapping.Name)))
+        {
+            throw new ArgumentException("Every imported column must have a name.", nameof(configuredMappings));
+        }
+
+        return mappings;
+    }
+
+    private static void AddRecord(
+        string[] record,
+        long rowNumber,
+        string? rawRecord,
+        int sourceColumnCount,
+        IReadOnlyList<CsvColumnMapping> mappings,
+        ICollection<object?[]> rows,
+        ICollection<ImportError> errors)
+    {
+        if (record.Length != sourceColumnCount)
+        {
+            errors.Add(new ImportError(rowNumber, $"Expected {sourceColumnCount} fields, found {record.Length}.", rawRecord));
+            return;
+        }
+
+        try
+        {
+            rows.Add(mappings.Select(mapping => ConvertValue(record[mapping.SourceIndex], mapping.DataType)).ToArray());
+        }
+        catch (FormatException ex)
+        {
+            errors.Add(new ImportError(rowNumber, ex.Message, rawRecord));
+        }
+    }
+
+    private static object? ConvertValue(string value, CsvColumnDataType dataType)
+    {
+        if (dataType == CsvColumnDataType.Text)
+        {
+            return value;
+        }
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return null;
+        }
+
+        return dataType switch
+        {
+            CsvColumnDataType.Integer when long.TryParse(value, NumberStyles.Integer, CultureInfo.InvariantCulture, out long integer) => integer,
+            CsvColumnDataType.Decimal => ParseDecimal(value),
+            CsvColumnDataType.Date when DateTimeOffset.TryParse(value, CultureInfo.CurrentCulture, DateTimeStyles.None, out DateTimeOffset date) => date.ToString("O"),
+            CsvColumnDataType.Boolean when bool.TryParse(value, out bool boolean) => boolean ? 1L : 0L,
+            CsvColumnDataType.Boolean when value is "1" or "tak" or "Tak" or "TAK" => 1L,
+            CsvColumnDataType.Boolean when value is "0" or "nie" or "Nie" or "NIE" => 0L,
+            _ => throw new FormatException($"Value '{value}' cannot be converted to {dataType}.")
+        };
+    }
+
+    private static double ParseDecimal(string value)
+    {
+        CultureInfo culture = value.Contains(',') && !value.Contains('.')
+            ? CultureInfo.GetCultureInfo("pl-PL")
+            : CultureInfo.InvariantCulture;
+        if (decimal.TryParse(value, NumberStyles.Number, culture, out decimal number))
+        {
+            return (double)number;
+        }
+
+        throw new FormatException($"Value '{value}' cannot be converted to {CsvColumnDataType.Decimal}.");
+    }
+
+    private static string SqliteType(CsvColumnDataType dataType) => dataType switch
+    {
+        CsvColumnDataType.Integer or CsvColumnDataType.Boolean => "INTEGER",
+        CsvColumnDataType.Decimal => "REAL",
+        _ => "TEXT"
+    };
 
     private static string BuildInsertSql(string tableName, IReadOnlyList<string> columnNames)
     {

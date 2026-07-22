@@ -3,6 +3,7 @@ using CSVForge.Application.Tables;
 using CSVForge.Infrastructure.Csv;
 using CSVForge.Infrastructure.Sqlite;
 using Microsoft.Data.Sqlite;
+using System.Globalization;
 
 namespace CSVForge.Infrastructure.Tables;
 
@@ -88,7 +89,9 @@ internal sealed class SqliteTableBrowser(IWorkspaceContext workspaceContext) : I
             Dictionary<string, string?> row = new(StringComparer.OrdinalIgnoreCase);
             for (int i = 0; i < columns.Count; i++)
             {
-                row[columns[i]] = reader.IsDBNull(i) ? null : reader.GetString(i);
+                row[columns[i]] = reader.IsDBNull(i)
+                    ? null
+                    : Convert.ToString(reader.GetValue(i), CultureInfo.InvariantCulture);
             }
 
             rows.Add(row);

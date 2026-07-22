@@ -31,7 +31,7 @@
         <Grid Margin="16">
             <Grid>
                 <Grid.ColumnDefinitions>
-                    <ColumnDefinition Width="300" MinWidth="220" MaxWidth="600" />
+                    <ColumnDefinition x:Name="FilesPanelColumn" Width="300" MinWidth="220" MaxWidth="600" />
                     <ColumnDefinition Width="14" />
                     <ColumnDefinition Width="*" />
                 </Grid.ColumnDefinitions>

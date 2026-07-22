@@ -1,6 +1,7 @@
 using System.Collections.ObjectModel;
 using System.ComponentModel;
 using System.Diagnostics;
+using System.Globalization;
 using System.IO;
 using System.Text.Json;
 using CSVForge.Application.Abstractions;
@@ -15,6 +16,7 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Data;
 using System.Windows.Input;
+using System.Windows.Media;
 using Microsoft.Data.Sqlite;
 
 namespace CSVForge.App.Wpf;
@@ -187,6 +189,7 @@ public partial class MainWindow : Window
             {
                 await RefreshImportsAsync();
                 SelectImport(result.Import.Id);
+                ExpandFilesPanelToFit(result.Import.DisplayName);
                 StatusText.Text = $"Zaimportowano {result.Import.RowCount} wierszy";
             }
         }
@@ -515,6 +518,24 @@ public partial class MainWindow : Window
                 ImportsListBox.SelectedItem = import;
                 break;
             }
+        }
+    }
+
+    private void ExpandFilesPanelToFit(string displayName)
+    {
+        FormattedText text = new(
+            displayName,
+            CultureInfo.CurrentUICulture,
+            FlowDirection.LeftToRight,
+            new Typeface(ImportsListBox.FontFamily, ImportsListBox.FontStyle, ImportsListBox.FontWeight, ImportsListBox.FontStretch),
+            ImportsListBox.FontSize,
+            Brushes.Black,
+            VisualTreeHelper.GetDpi(this).PixelsPerDip);
+
+        double requiredWidth = Math.Ceiling(text.WidthIncludingTrailingWhitespace) + 58;
+        if (requiredWidth > FilesPanelColumn.ActualWidth)
+        {
+            FilesPanelColumn.Width = new GridLength(Math.Min(requiredWidth, FilesPanelColumn.MaxWidth));
         }
     }
 

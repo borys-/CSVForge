@@ -178,7 +178,6 @@ public partial class MainWindow : Window
 
         if (dialog.ShowDialog(this) == true)
         {
-            CsvPathTextBox.Text = dialog.FileName;
             ImportPreviewWindow previewWindow = new(_previewCsv, _importCsv, dialog.FileName)
             {
                 Owner = this
@@ -191,46 +190,6 @@ public partial class MainWindow : Window
                 StatusText.Text = $"Zaimportowano {result.Import.RowCount} wierszy";
             }
         }
-    }
-
-    private async void ImportCsv_Click(object sender, RoutedEventArgs e)
-    {
-        await RunUiActionAsync(async cancellationToken =>
-        {
-            string path = CsvPathTextBox.Text.Trim();
-            if (string.IsNullOrWhiteSpace(path))
-            {
-                MessageBox.Show(this, "Wybierz plik CSV do importu.", "CSVForge", MessageBoxButton.OK, MessageBoxImage.Information);
-                return;
-            }
-
-            string displayName = Path.GetFileNameWithoutExtension(path);
-            Progress<ImportProgress> progress = new(value => StatusText.Text = $"Import: {value.ProcessedRows} wierszy");
-            ImportResult result = await _importCsv.ExecuteAsync(CreateImportRequest(path, displayName), progress, cancellationToken);
-            await RefreshImportsAsync();
-            SelectImport(result.Import.Id);
-        }, "Import zakończony");
-    }
-
-    private async void PreviewCsv_Click(object sender, RoutedEventArgs e)
-    {
-        string path = CsvPathTextBox.Text.Trim();
-        if (string.IsNullOrWhiteSpace(path))
-        {
-            MessageBox.Show(this, "Wybierz plik CSV do podglądu.", "CSVForge", MessageBoxButton.OK, MessageBoxImage.Information);
-            return;
-        }
-
-        await RunUiActionAsync(async cancellationToken =>
-        {
-            CsvPreview preview = await _previewCsv.ExecuteAsync(CreateImportRequest(path, Path.GetFileNameWithoutExtension(path)), cancellationToken);
-            List<Dictionary<string, string?>> rows = preview.Rows.Select(row => preview.Columns
-                .Select((column, index) => new { column.Name, Value = index < row.Count ? row[index] : null })
-                .ToDictionary(item => item.Name, item => item.Value)).ToList();
-            ShowRows(preview.Columns.Select(column => column.Name), rows);
-            TableTitleText.Text = $"Podgląd: {Path.GetFileName(path)} ({preview.Rows.Count} wierszy)";
-            PageStatusText.Text = preview.Errors.Count == 0 ? "CSV poprawny" : $"Błędy: {preview.Errors.Count}";
-        }, "Podgląd gotowy");
     }
 
     private async void ImportsListBox_SelectionChanged(object sender, SelectionChangedEventArgs e)

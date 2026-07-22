@@ -62,6 +62,40 @@ public sealed class CsvReaderServiceTests
     }
 
     [Fact]
+    public async Task PreviewCsvUseCase_DetectsTabDelimiter()
+    {
+        string csvPath = await WriteTempFileAsync("Name\tCity\r\nAda\tWarszawa\r\n", Encoding.UTF8);
+
+        CsvPreview preview = await CreatePreviewUseCase().ExecuteAsync(new ImportRequest(csvPath, "People", true, null, null));
+
+        Assert.Equal(["Name", "City"], preview.Columns.Select(column => column.Name));
+        Assert.Equal("Warszawa", preview.Rows[0][1]);
+    }
+
+    [Fact]
+    public async Task PreviewCsvUseCase_ReadsUtf8Bom()
+    {
+        string csvPath = await WriteTempFileAsync("Nazwa;Miasto\r\nŻółw;Łódź\r\n", new UTF8Encoding(true));
+
+        CsvPreview preview = await CreatePreviewUseCase().ExecuteAsync(new ImportRequest(csvPath, "People", true, null, null));
+
+        Assert.Equal("Nazwa", preview.Columns[0].Name);
+        Assert.Equal("Łódź", preview.Rows[0][1]);
+    }
+
+    [Fact]
+    public async Task PreviewCsvUseCase_ReturnsEmptyPreviewForEmptyFile()
+    {
+        string csvPath = await WriteTempFileAsync(string.Empty, Encoding.UTF8);
+
+        CsvPreview preview = await CreatePreviewUseCase().ExecuteAsync(new ImportRequest(csvPath, "Empty", true, null, null));
+
+        Assert.Empty(preview.Columns);
+        Assert.Empty(preview.Rows);
+        Assert.Empty(preview.Errors);
+    }
+
+    [Fact]
     public async Task PreviewCsvUseCase_NormalizesDuplicateHeaders()
     {
         string csvPath = await WriteTempFileAsync("Order Id;Order Id;123\r\n1;2;3\r\n", Encoding.UTF8);

@@ -151,6 +151,42 @@ public sealed class CsvImporterServiceTests
         Assert.Contains(reports, item => item.ProcessedRows == 4);
     }
 
+    [Fact]
+    public async Task ImportCsvUseCase_ImportsHeaderOnlyAsEmptyTable()
+    {
+        (ServiceProvider provider, string csvPath) = await CreateWorkspaceAndCsvAsync("Name;City\r\n");
+
+        ImportResult result = await provider.GetRequiredService<IImportCsvUseCase>()
+            .ExecuteAsync(new ImportRequest(csvPath, "Empty", true, null, null));
+
+        Assert.Equal(0, result.Import.RowCount);
+        Assert.Equal(["Name", "City"], result.Import.Columns.Select(column => column.Name));
+    }
+
+    [Fact]
+    public async Task ImportCsvUseCase_PreservesVeryLongTextField()
+    {
+        string value = new('x', 100_000);
+        (ServiceProvider provider, string csvPath) = await CreateWorkspaceAndCsvAsync($"Value\r\n{value}\r\n");
+
+        ImportResult result = await provider.GetRequiredService<IImportCsvUseCase>()
+            .ExecuteAsync(new ImportRequest(csvPath, "Long", true, null, null));
+
+        Assert.Equal(1, result.Import.RowCount);
+        Assert.Empty(result.Errors);
+    }
+
+    private static async Task<(ServiceProvider Provider, string CsvPath)> CreateWorkspaceAndCsvAsync(string content)
+    {
+        string directory = Path.Combine(Path.GetTempPath(), "CSVForge.Tests", Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(directory);
+        string csvPath = Path.Combine(directory, "data.csv");
+        await File.WriteAllTextAsync(csvPath, content);
+        ServiceProvider provider = new ServiceCollection().AddApplication().AddInfrastructure().BuildServiceProvider();
+        await provider.GetRequiredService<ICreateWorkspaceUseCase>().ExecuteAsync(Path.Combine(directory, "workspace.db"));
+        return (provider, csvPath);
+    }
+
     private sealed class CancelOnProgress(CancellationTokenSource cancellation) : IProgress<ImportProgress>
     {
         public void Report(ImportProgress value)

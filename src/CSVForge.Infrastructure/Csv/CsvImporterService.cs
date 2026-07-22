@@ -35,10 +35,17 @@ internal sealed class CsvImporterService(IWorkspaceContext workspaceContext) : I
         await using SqliteConnection connection = SqliteConnectionFactory.Create(workspaceContext.CurrentWorkspacePath);
         await connection.OpenAsync(cancellationToken);
 
-        CsvImport import = await ImportRowsAsync(connection, request, encoding, delimiter, progress, cancellationToken);
-        IReadOnlyList<ImportError> errors = await ReadErrorsAsync(connection, import.Id, cancellationToken);
-
-        return new ImportResult(import, errors);
+        try
+        {
+            CsvImport import = await ImportRowsAsync(connection, request, encoding, delimiter, progress, cancellationToken);
+            IReadOnlyList<ImportError> errors = await ReadErrorsAsync(connection, import.Id, cancellationToken);
+            return new ImportResult(import, errors);
+        }
+        catch
+        {
+            await DropUnregisteredImportTablesAsync(connection);
+            throw;
+        }
     }
 
     private static async Task<CsvImport> ImportRowsAsync(
@@ -246,5 +253,33 @@ internal sealed class CsvImporterService(IWorkspaceContext workspaceContext) : I
         }
 
         await transaction.CommitAsync(cancellationToken);
+    }
+
+    private static async Task DropUnregisteredImportTablesAsync(SqliteConnection connection)
+    {
+        await using SqliteCommand findCommand = connection.CreateCommand();
+        findCommand.CommandText = """
+            SELECT name
+            FROM sqlite_master
+            WHERE type = 'table'
+              AND name LIKE 'import_%'
+              AND name NOT IN (SELECT table_name FROM _workspace_imports);
+            """;
+
+        List<string> tableNames = [];
+        await using (SqliteDataReader reader = await findCommand.ExecuteReaderAsync(CancellationToken.None))
+        {
+            while (await reader.ReadAsync(CancellationToken.None))
+            {
+                tableNames.Add(reader.GetString(0));
+            }
+        }
+
+        foreach (string tableName in tableNames)
+        {
+            await using SqliteCommand dropCommand = connection.CreateCommand();
+            dropCommand.CommandText = $"DROP TABLE {CsvImportNameHelper.QuoteIdentifier(tableName)};";
+            await dropCommand.ExecuteNonQueryAsync(CancellationToken.None);
+        }
     }
 }

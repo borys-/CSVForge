@@ -82,4 +82,40 @@ public sealed class CsvImporterServiceTests
         await Assert.ThrowsAsync<FileNotFoundException>(() => provider.GetRequiredService<IImportCsvUseCase>()
             .ExecuteAsync(new ImportRequest(Path.Combine(directory, "missing.csv"), "Missing", true, null, null)));
     }
+
+    [Fact]
+    public async Task ImportCsvUseCase_CancellationRemovesPartiallyImportedTable()
+    {
+        string directory = Path.Combine(Path.GetTempPath(), "CSVForge.Tests", Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(directory);
+        string workspacePath = Path.Combine(directory, "workspace.db");
+        string csvPath = Path.Combine(directory, "large.csv");
+        await File.WriteAllLinesAsync(csvPath, ["Id", .. Enumerable.Range(1, 1200).Select(value => value.ToString())]);
+
+        ServiceProvider provider = new ServiceCollection().AddApplication().AddInfrastructure().BuildServiceProvider();
+        await provider.GetRequiredService<ICreateWorkspaceUseCase>().ExecuteAsync(workspacePath);
+        using CancellationTokenSource cancellation = new();
+        CancelOnProgress progress = new(cancellation);
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => provider.GetRequiredService<IImportCsvUseCase>()
+            .ExecuteAsync(new ImportRequest(csvPath, "Large", true, null, null), progress, cancellation.Token));
+
+        await using SqliteConnection connection = new($"Data Source={workspacePath}");
+        await connection.OpenAsync();
+        await using SqliteCommand command = connection.CreateCommand();
+        command.CommandText = "SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name LIKE 'import_%';";
+        Assert.Equal(0L, (long)(await command.ExecuteScalarAsync() ?? 0L));
+        Assert.Empty(await provider.GetRequiredService<IListImportedTablesUseCase>().ExecuteAsync());
+    }
+
+    private sealed class CancelOnProgress(CancellationTokenSource cancellation) : IProgress<ImportProgress>
+    {
+        public void Report(ImportProgress value)
+        {
+            if (value.ProcessedRows >= 500)
+            {
+                cancellation.Cancel();
+            }
+        }
+    }
 }

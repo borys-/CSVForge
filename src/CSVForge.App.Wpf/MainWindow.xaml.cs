@@ -491,12 +491,16 @@ public partial class MainWindow : Window
         }, "Nazwa zmieniona");
     }
 
-    private void ImportContextMenu_Opened(object sender, RoutedEventArgs e)
+    private void ImportsListBox_PreviewMouseRightButtonDown(object sender, MouseButtonEventArgs e)
     {
-        if (sender is ContextMenu { PlacementTarget: FrameworkElement { DataContext: CsvImport import } })
+        if (e.OriginalSource is DependencyObject source
+            && ItemsControl.ContainerFromElement(ImportsListBox, source) is ListBoxItem item)
         {
-            ImportsListBox.SelectedItem = import;
+            item.IsSelected = true;
+            return;
         }
+
+        ImportsListBox.SelectedItem = null;
     }
 
     private void SelectImport(Guid importId)

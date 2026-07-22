@@ -91,21 +91,15 @@
                             <Button Grid.Column="1" Content="Eksportuj" Height="30" Margin="8,0,0,0" Padding="12,0" Click="ExportTable_Click" />
                         </Grid>
 
-                        <ListBox x:Name="ImportsListBox" SelectionChanged="ImportsListBox_SelectionChanged" HorizontalContentAlignment="Stretch">
-                            <ListBox.ItemContainerStyle>
-                                <Style TargetType="ListBoxItem">
-                                    <Setter Property="HorizontalContentAlignment" Value="Stretch" />
-                                    <Setter Property="ContextMenu">
-                                        <Setter.Value>
-                                            <ContextMenu Opened="ImportContextMenu_Opened">
-                                                <MenuItem Header="Zmień nazwę" Click="RenameImport_Click" />
-                                                <Separator />
-                                                <MenuItem Header="Usuń" Click="DeleteImport_Click" />
-                                            </ContextMenu>
-                                        </Setter.Value>
-                                    </Setter>
-                                </Style>
-                            </ListBox.ItemContainerStyle>
+                        <ListBox x:Name="ImportsListBox" SelectionChanged="ImportsListBox_SelectionChanged"
+                                 HorizontalContentAlignment="Stretch" PreviewMouseRightButtonDown="ImportsListBox_PreviewMouseRightButtonDown">
+                            <ListBox.ContextMenu>
+                                <ContextMenu>
+                                    <MenuItem Header="Zmień nazwę" Click="RenameImport_Click" />
+                                    <Separator />
+                                    <MenuItem Header="Usuń" Click="DeleteImport_Click" />
+                                </ContextMenu>
+                            </ListBox.ContextMenu>
                             <ListBox.ItemTemplate>
                                 <DataTemplate>
                                     <TextBlock Text="{Binding DisplayName}" Padding="2,4" TextTrimming="CharacterEllipsis" ToolTip="{Binding DisplayName}" />

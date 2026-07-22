@@ -60,4 +60,27 @@ public sealed class SqliteTableExporterTests
         Assert.Equal("existing", await File.ReadAllTextAsync(outputPath));
         Assert.Empty(Directory.GetFiles(directory, "*.tmp"));
     }
+
+    [Fact]
+    public async Task ExportTableUseCase_ExportsOnlyFilteredRows()
+    {
+        string directory = Path.Combine(Path.GetTempPath(), "CSVForge.Tests", Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(directory);
+        string workspacePath = Path.Combine(directory, "workspace.db");
+        string inputPath = Path.Combine(directory, "input.csv");
+        string outputPath = Path.Combine(directory, "output.csv");
+        await File.WriteAllTextAsync(inputPath, "Id;Name\r\n1;Ada\r\n2;Ola\r\n");
+        ServiceProvider provider = new ServiceCollection().AddApplication().AddInfrastructure().BuildServiceProvider();
+        await provider.GetRequiredService<ICreateWorkspaceUseCase>().ExecuteAsync(workspacePath);
+        ImportResult import = await provider.GetRequiredService<IImportCsvUseCase>()
+            .ExecuteAsync(new ImportRequest(inputPath, "Input", true, null, null));
+
+        ExportResult result = await provider.GetRequiredService<IExportTableUseCase>()
+            .ExecuteAsync(new ExportTableRequest(import.Import.TableName, outputPath, ';', true, "Ada"));
+
+        Assert.Equal(1, result.ExportedRows);
+        string content = await File.ReadAllTextAsync(outputPath);
+        Assert.Contains("Ada", content);
+        Assert.DoesNotContain("Ola", content);
+    }
 }

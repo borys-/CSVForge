@@ -4,4 +4,5 @@ public sealed record ExportTableRequest(
     string TableName,
     string OutputPath,
     char Delimiter,
-    bool IncludeHeader);
+    bool IncludeHeader,
+    string? TextFilter = null);

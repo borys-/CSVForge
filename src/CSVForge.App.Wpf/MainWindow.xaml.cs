@@ -302,7 +302,7 @@ public partial class MainWindow : Window
 
         await RunUiActionAsync(async cancellationToken =>
         {
-            ExportResult result = await _exportTable.ExecuteAsync(new ExportTableRequest(tableName, dialog.FileName, delimiter, true), cancellationToken);
+            ExportResult result = await _exportTable.ExecuteAsync(new ExportTableRequest(tableName, dialog.FileName, delimiter, true, FilterTextBox.Text.Trim()), cancellationToken);
             MessageBox.Show(this, $"Wyeksportowano {result.ExportedRows} wierszy do:\n{result.FilePath}", "CSVForge", MessageBoxButton.OK, MessageBoxImage.Information);
         }, "Eksport zakończony");
     }

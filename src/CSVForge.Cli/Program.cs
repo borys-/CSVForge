@@ -109,7 +109,7 @@ static async Task<int> RunAsync(IServiceProvider services, string[] args)
         case "export":
         {
             ExportResult result = await services.GetRequiredService<IExportTableUseCase>().ExecuteAsync(new ExportTableRequest(
-                Required(options, "table"), Required(options, "output"), Delimiter(options) ?? ';', !options.ContainsKey("no-header")));
+                Required(options, "table"), Required(options, "output"), Delimiter(options) ?? ';', !options.ContainsKey("no-header"), options.GetValueOrDefault("filter")));
             Console.WriteLine($"Wyeksportowano {result.ExportedRows} wierszy do {result.FilePath}.");
             return 0;
         }
@@ -203,6 +203,6 @@ static void PrintHelp()
         duplicates --workspace <db> --table <tabela> --columns <kol1,kol2> [--mode Summary|AllDuplicateRows]
         compare --workspace <db> --left <tabela> --right <tabela> --left-keys <kolumny> --right-keys <kolumny> [--mode AllWithStatus]
         join --workspace <db> --left <tabela> --right <tabela> --left-keys <kolumny> --right-keys <kolumny> [--type Inner|Left|Right]
-        export --workspace <db> --table <tabela> --output <plik.csv> [--delimiter ;] [--no-header]
+        export --workspace <db> --table <tabela> --output <plik.csv> [--delimiter ;] [--filter <tekst>] [--no-header]
         """);
 }

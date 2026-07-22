@@ -46,8 +46,16 @@ internal sealed class SqliteTableExporter(IWorkspaceContext workspaceContext) : 
     {
         await using SqliteConnection connection = SqliteConnectionFactory.Create(workspacePath);
         await connection.OpenAsync(cancellationToken);
+        IReadOnlyList<string> columns = await ReadColumnsAsync(connection, request.TableName, cancellationToken);
         await using SqliteCommand command = connection.CreateCommand();
-        command.CommandText = $"SELECT * FROM {CsvImportNameHelper.QuoteIdentifier(request.TableName)};";
+        string whereClause = string.IsNullOrWhiteSpace(request.TextFilter)
+            ? string.Empty
+            : " WHERE " + string.Join(" OR ", columns.Select(column => $"{CsvImportNameHelper.QuoteIdentifier(column)} LIKE $filter"));
+        command.CommandText = $"SELECT * FROM {CsvImportNameHelper.QuoteIdentifier(request.TableName)}{whereClause};";
+        if (!string.IsNullOrWhiteSpace(request.TextFilter))
+        {
+            command.Parameters.AddWithValue("$filter", $"%{request.TextFilter}%");
+        }
         await using SqliteDataReader reader = await command.ExecuteReaderAsync(cancellationToken);
         await using StreamWriter writer = new(temporaryPath, false, new UTF8Encoding(encoderShouldEmitUTF8Identifier: true));
         string delimiter = request.Delimiter.ToString();
@@ -68,6 +76,23 @@ internal sealed class SqliteTableExporter(IWorkspaceContext workspaceContext) : 
         }
 
         return exportedRows;
+    }
+
+    private static async Task<IReadOnlyList<string>> ReadColumnsAsync(SqliteConnection connection, string tableName, CancellationToken cancellationToken)
+    {
+        await using SqliteCommand command = connection.CreateCommand();
+        command.CommandText = $"PRAGMA table_info({CsvImportNameHelper.QuoteIdentifier(tableName)});";
+        List<string> columns = [];
+        await using SqliteDataReader reader = await command.ExecuteReaderAsync(cancellationToken);
+        while (await reader.ReadAsync(cancellationToken))
+        {
+            columns.Add(reader.GetString(1));
+        }
+        if (columns.Count == 0)
+        {
+            throw new InvalidOperationException($"Table '{tableName}' does not exist or has no columns.");
+        }
+        return columns;
     }
 
     private static string Escape(string value, char delimiter)

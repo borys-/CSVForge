@@ -80,7 +80,7 @@ public partial class ImportPreviewWindow : Window
     {
         if (string.IsNullOrWhiteSpace(DisplayNameTextBox.Text))
         {
-            MessageBox.Show(this, "Podaj nazwę importowanej tabeli.", "CSVForge", MessageBoxButton.OK, MessageBoxImage.Information);
+            MessageBox.Show(this, "Podaj nazwę pliku w workspace.", "CSVForge", MessageBoxButton.OK, MessageBoxImage.Information);
             DisplayNameTextBox.Focus();
             return;
         }

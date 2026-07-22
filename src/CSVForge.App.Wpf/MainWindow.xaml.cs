@@ -255,7 +255,7 @@ public partial class MainWindow : Window
         IReadOnlyList<string> keyColumns = SelectedKeyColumns();
         if (_selectedImport is null)
         {
-            ShowValidationMessage("Wybierz tabelę, w której chcesz znaleźć duplikaty.");
+            ShowValidationMessage("Wybierz plik, w którym chcesz znaleźć duplikaty.");
             return;
         }
         if (keyColumns.Count == 0)
@@ -284,18 +284,18 @@ public partial class MainWindow : Window
         IReadOnlyList<string> rightKeys = RightKeyColumns();
         if (_selectedImport is null)
         {
-            ShowValidationMessage("Wybierz tabelę lewą z listy tabel.");
+            ShowValidationMessage("Wybierz lewy plik z listy plików.");
             return;
         }
         if (CompareTableComboBox.SelectedItem is not CsvImport rightImport)
         {
-            ShowValidationMessage("Wybierz tabelę prawą do porównania.");
+            ShowValidationMessage("Wybierz prawy plik do porównania.");
             return;
         }
         IReadOnlyList<string> keyColumns = SelectedKeyColumns();
         if (keyColumns.Count == 0 || rightKeys.Count != keyColumns.Count)
         {
-            ShowValidationMessage("Podaj taką samą liczbę kluczy dla lewej i prawej tabeli.");
+            ShowValidationMessage("Podaj taką samą liczbę kluczy dla lewego i prawego pliku.");
             return;
         }
 
@@ -320,25 +320,25 @@ public partial class MainWindow : Window
         IReadOnlyList<string> rightKeys = ParseColumns(JoinRightKeyColumnsTextBox.Text);
         if (_selectedImport is null)
         {
-            ShowValidationMessage("Wybierz tabelę lewą z listy tabel.");
+            ShowValidationMessage("Wybierz lewy plik z listy plików.");
             return;
         }
         if (JoinTableComboBox.SelectedItem is not CsvImport rightImport)
         {
-            ShowValidationMessage("Wybierz tabelę prawą do połączenia.");
+            ShowValidationMessage("Wybierz prawy plik do połączenia.");
             return;
         }
         IReadOnlyList<string> keyColumns = SelectedKeyColumns();
         if (keyColumns.Count == 0 || rightKeys.Count != keyColumns.Count)
         {
-            ShowValidationMessage("Podaj taką samą liczbę kluczy dla lewej i prawej tabeli.");
+            ShowValidationMessage("Podaj taką samą liczbę kluczy dla lewego i prawego pliku.");
             return;
         }
 
         string? missingColumn = rightKeys.FirstOrDefault(key => rightImport.Columns.All(column => !string.Equals(column.Name, key, StringComparison.OrdinalIgnoreCase)));
         if (missingColumn is not null)
         {
-            MessageBox.Show(this, $"Tabela po prawej stronie nie ma kolumny '{missingColumn}'.", "CSVForge", MessageBoxButton.OK, MessageBoxImage.Information);
+            MessageBox.Show(this, $"Prawy plik nie ma kolumny '{missingColumn}'.", "CSVForge", MessageBoxButton.OK, MessageBoxImage.Information);
             return;
         }
 
@@ -365,7 +365,7 @@ public partial class MainWindow : Window
         string? tableName = _adHocTableName ?? _selectedImport?.TableName;
         if (tableName is null)
         {
-            MessageBox.Show(this, "Wybierz tabelę do eksportu.", "CSVForge", MessageBoxButton.OK, MessageBoxImage.Information);
+            MessageBox.Show(this, "Wybierz plik lub wynik do eksportu.", "CSVForge", MessageBoxButton.OK, MessageBoxImage.Information);
             return;
         }
 
@@ -375,7 +375,7 @@ public partial class MainWindow : Window
             DefaultExt = ".csv",
             AddExtension = true,
             FileName = $"{tableName}.csv",
-            Title = "Eksportuj tabelę do CSV"
+            Title = "Eksportuj dane do CSV"
         };
 
         if (dialog.ShowDialog(this) != true)
@@ -450,7 +450,7 @@ public partial class MainWindow : Window
         }
 
         MessageBoxResult confirmation = MessageBox.Show(this,
-            $"Usunąć import '{_selectedImport.DisplayName}' i jego tabelę?",
+            $"Usunąć plik '{_selectedImport.DisplayName}' z workspace?",
             "CSVForge", MessageBoxButton.YesNo, MessageBoxImage.Warning);
         if (confirmation != MessageBoxResult.Yes)
         {
@@ -465,7 +465,7 @@ public partial class MainWindow : Window
             _adHocTableName = null;
             DataGrid.ItemsSource = null;
             await RefreshImportsAsync();
-        }, "Import usunięty");
+        }, "Plik usunięty");
     }
 
     private async void RenameImport_Click(object sender, RoutedEventArgs e)
@@ -542,7 +542,7 @@ public partial class MainWindow : Window
             long firstRow = page.Rows.Count == 0 ? 0 : _pageOffset + 1;
             long lastRow = _pageOffset + page.Rows.Count;
             PageStatusText.Text = $"{firstRow}-{lastRow} z {page.TotalRows}";
-        }, "Tabela odświeżona");
+        }, "Dane odświeżone");
     }
 
     private static ObservableCollection<Dictionary<string, string?>> ToRows(TablePage page)
@@ -710,7 +710,7 @@ public partial class MainWindow : Window
     private void ShowHelp_Click(object sender, RoutedEventArgs e)
     {
         MessageBox.Show(this,
-            "1. Utwórz lub otwórz workspace.\n2. Wybierz CSV i sprawdź podgląd.\n3. Zaimportuj dane.\n4. Wybierz tabelę, klucze oraz operację.\n5. Wyniki możesz filtrować, przeglądać stronami i eksportować.",
+            "1. Otwórz workspace.\n2. Wybierz plik CSV i przygotuj import.\n3. Wybierz plik, klucze oraz operację.\n4. Wyniki możesz filtrować, przeglądać stronami i eksportować.",
             "CSVForge - pomoc", MessageBoxButton.OK, MessageBoxImage.Information);
     }
 

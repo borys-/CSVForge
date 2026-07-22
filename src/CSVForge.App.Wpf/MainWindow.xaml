@@ -63,7 +63,7 @@
 
                 <Border Background="White" BorderBrush="#D8DEE8" BorderThickness="1" CornerRadius="6" Padding="12">
                     <DockPanel>
-                        <TextBlock DockPanel.Dock="Top" Text="Tabele" FontSize="16" FontWeight="SemiBold" Margin="0,0,0,10" />
+                        <TextBlock DockPanel.Dock="Top" Text="Pliki CSV" FontSize="16" FontWeight="SemiBold" Margin="0,0,0,10" />
 
                         <GroupBox DockPanel.Dock="Bottom" Header="Historia operacji" Margin="0,10,0,0" Height="160">
                             <DockPanel>
@@ -144,7 +144,7 @@
                                     <ColumnDefinition Width="360" />
                                     <ColumnDefinition Width="*" />
                                 </Grid.ColumnDefinitions>
-                                <TextBlock Text="Klucze tabeli lewej" VerticalAlignment="Center" />
+                                <TextBlock Text="Klucze lewego pliku" VerticalAlignment="Center" />
                                 <ComboBox x:Name="DuplicateColumnComboBox" Grid.Column="1" Height="30" Margin="10,0,0,0" IsEditable="True" ToolTip="Wybierz jedną kolumnę lub wpisz kilka nazw oddzielonych przecinkami" />
                             </Grid>
 
@@ -179,7 +179,7 @@
                                             <ColumnDefinition Width="180" />
                                             <ColumnDefinition Width="Auto" />
                                         </Grid.ColumnDefinitions>
-                                        <TextBlock Text="Tabela prawa" VerticalAlignment="Center" />
+                                        <TextBlock Text="Prawy plik" VerticalAlignment="Center" />
                                         <ComboBox x:Name="CompareTableComboBox" Grid.Column="1" Height="30" Margin="10,0,18,0" DisplayMemberPath="DisplayName" SelectionChanged="CompareTableComboBox_SelectionChanged" />
                                         <TextBlock Grid.Column="2" Text="Klucze prawe" VerticalAlignment="Center" />
                                         <TextBox x:Name="RightKeyColumnsTextBox" Grid.Column="3" Height="30" Margin="10,0,18,0" VerticalContentAlignment="Center" />
@@ -190,7 +190,7 @@
                                             <ComboBoxItem Content="Tylko lewa" Tag="LeftOnly" />
                                             <ComboBoxItem Content="Tylko prawa" Tag="RightOnly" />
                                         </ComboBox>
-                                        <Button Grid.Column="6" Content="Porównaj tabele" Height="32" MinWidth="126" Padding="14,0" Click="CompareTables_Click" />
+                                        <Button Grid.Column="6" Content="Porównaj pliki" Height="32" MinWidth="126" Padding="14,0" Click="CompareTables_Click" />
                                     </Grid>
                                 </TabItem>
 
@@ -209,7 +209,7 @@
                                             <ColumnDefinition Width="110" />
                                             <ColumnDefinition Width="Auto" />
                                         </Grid.ColumnDefinitions>
-                                        <TextBlock Text="Tabela prawa" VerticalAlignment="Center" />
+                                        <TextBlock Text="Prawy plik" VerticalAlignment="Center" />
                                         <ComboBox x:Name="JoinTableComboBox" Grid.Column="1" Height="30" Margin="10,0,18,0" DisplayMemberPath="DisplayName" SelectionChanged="JoinTableComboBox_SelectionChanged" />
                                         <TextBlock Grid.Column="2" Text="Klucze prawe" VerticalAlignment="Center" />
                                         <TextBox x:Name="JoinRightKeyColumnsTextBox" Grid.Column="3" Height="30" Margin="10,0,18,0" VerticalContentAlignment="Center" />
@@ -219,7 +219,7 @@
                                             <ComboBoxItem Content="INNER" Tag="Inner" />
                                             <ComboBoxItem Content="RIGHT" Tag="Right" />
                                         </ComboBox>
-                                        <Button Grid.Column="6" Content="Połącz tabele" Height="32" MinWidth="126" Padding="14,0" Click="JoinTables_Click" />
+                                        <Button Grid.Column="6" Content="Połącz pliki" Height="32" MinWidth="126" Padding="14,0" Click="JoinTables_Click" />
 
                                         <TextBlock Grid.Row="1" Text="Kolumny lewe" Margin="0,8,0,0" VerticalAlignment="Center" />
                                         <TextBox x:Name="LeftOutputColumnsTextBox" Grid.Row="1" Grid.Column="1" Height="28" Margin="10,8,18,0" VerticalContentAlignment="Center" />

@@ -20,6 +20,11 @@ internal sealed class CsvImporterService(IWorkspaceContext workspaceContext) : I
             throw new InvalidOperationException("Open or create a workspace before importing CSV files.");
         }
 
+        if (!File.Exists(request.FilePath))
+        {
+            throw new FileNotFoundException("CSV file does not exist.", request.FilePath);
+        }
+
         Encoding.RegisterProvider(CodePagesEncodingProvider.Instance);
         Encoding encoding = string.IsNullOrWhiteSpace(request.EncodingName)
             ? new UTF8Encoding(encoderShouldEmitUTF8Identifier: false, throwOnInvalidBytes: true)
@@ -67,6 +72,7 @@ internal sealed class CsvImporterService(IWorkspaceContext workspaceContext) : I
 
         long rowCount = 0;
         List<string[]> batch = [];
+        List<ImportError> errors = [];
         if (!request.HasHeader)
         {
             batch.Add(firstRecord);
@@ -75,7 +81,14 @@ internal sealed class CsvImporterService(IWorkspaceContext workspaceContext) : I
         while (await csv.ReadAsync())
         {
             cancellationToken.ThrowIfCancellationRequested();
-            batch.Add(csv.Parser.Record ?? []);
+            string[] record = csv.Parser.Record ?? [];
+            if (record.Length != columnNames.Count)
+            {
+                errors.Add(new ImportError(csv.Parser.Row, $"Expected {columnNames.Count} fields, found {record.Length}.", csv.Parser.RawRecord));
+                continue;
+            }
+
+            batch.Add(record);
 
             if (batch.Count >= BatchSize)
             {
@@ -101,6 +114,7 @@ internal sealed class CsvImporterService(IWorkspaceContext workspaceContext) : I
             originalHeaders.Select((header, index) => new CsvColumn(header, columnNames[index], index)).ToArray());
 
         await SaveMetadataAsync(connection, import, cancellationToken);
+        await SaveErrorsAsync(connection, import.Id, errors, cancellationToken);
         progress?.Report(new ImportProgress(rowCount, rowCount, "Import completed"));
 
         return import;
@@ -189,7 +203,48 @@ internal sealed class CsvImporterService(IWorkspaceContext workspaceContext) : I
 
     private static async Task<IReadOnlyList<ImportError>> ReadErrorsAsync(SqliteConnection connection, Guid importId, CancellationToken cancellationToken)
     {
-        await Task.CompletedTask;
-        return Array.Empty<ImportError>();
+        await using SqliteCommand command = connection.CreateCommand();
+        command.CommandText = """
+            SELECT row_number, message, raw_row
+            FROM _workspace_errors
+            WHERE import_id = $importId
+            ORDER BY row_number;
+            """;
+        command.Parameters.AddWithValue("$importId", importId.ToString());
+
+        List<ImportError> errors = [];
+        await using SqliteDataReader reader = await command.ExecuteReaderAsync(cancellationToken);
+        while (await reader.ReadAsync(cancellationToken))
+        {
+            errors.Add(new ImportError(reader.GetInt64(0), reader.GetString(1), reader.IsDBNull(2) ? null : reader.GetString(2)));
+        }
+
+        return errors;
+    }
+
+    private static async Task SaveErrorsAsync(SqliteConnection connection, Guid importId, IReadOnlyList<ImportError> errors, CancellationToken cancellationToken)
+    {
+        if (errors.Count == 0)
+        {
+            return;
+        }
+
+        await using SqliteTransaction transaction = (SqliteTransaction)await connection.BeginTransactionAsync(cancellationToken);
+        foreach (ImportError error in errors)
+        {
+            await using SqliteCommand command = connection.CreateCommand();
+            command.Transaction = transaction;
+            command.CommandText = """
+                INSERT INTO _workspace_errors (import_id, row_number, message, raw_row)
+                VALUES ($importId, $rowNumber, $message, $rawRow);
+                """;
+            command.Parameters.AddWithValue("$importId", importId.ToString());
+            command.Parameters.AddWithValue("$rowNumber", error.RowNumber);
+            command.Parameters.AddWithValue("$message", error.Message);
+            command.Parameters.AddWithValue("$rawRow", (object?)error.RawRow ?? DBNull.Value);
+            await command.ExecuteNonQueryAsync(cancellationToken);
+        }
+
+        await transaction.CommitAsync(cancellationToken);
     }
 }

@@ -1,7 +1,7 @@
 <Window x:Class="CSVForge.App.Wpf.MainWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        Title="CSVForge" Height="720" Width="1120" MinHeight="620" MinWidth="960"
+        Title="CSVForge" Height="760" Width="1240" MinHeight="680" MinWidth="1040"
         Background="#F6F7F9">
     <DockPanel>
         <Border DockPanel.Dock="Top" Background="#17202A" Padding="16,12">
@@ -16,7 +16,7 @@
                     <ColumnDefinition Width="Auto" />
                 </Grid.ColumnDefinitions>
                 <TextBlock Text="CSVForge" Foreground="White" FontSize="20" FontWeight="SemiBold" VerticalAlignment="Center" />
-                <TextBlock x:Name="WorkspaceStatusText" Grid.Column="1" Foreground="#D6DEE8" Margin="18,0,0,0" VerticalAlignment="Center" Text="Brak otwartego workspace" />
+                <TextBlock x:Name="WorkspaceStatusText" Grid.Column="1" Foreground="#D6DEE8" Margin="18,0,0,0" VerticalAlignment="Center" Text="Brak otwartego workspace" TextTrimming="CharacterEllipsis" />
                 <ProgressBar x:Name="OperationProgressBar" Grid.Column="2" Width="110" Height="8" Margin="0,0,12,0" IsIndeterminate="True" Visibility="Collapsed" />
                 <Button x:Name="CancelOperationButton" Grid.Column="3" Content="Anuluj" Height="28" Margin="0,0,12,0" Padding="10,0" Visibility="Collapsed" Click="CancelOperation_Click" />
                 <Button Grid.Column="4" Content="Logi" Height="28" Margin="0,0,8,0" Padding="10,0" Click="OpenLogs_Click" />
@@ -45,14 +45,13 @@
                         <ColumnDefinition Width="Auto" />
                         <ColumnDefinition Width="Auto" />
                     </Grid.ColumnDefinitions>
-
                     <TextBlock Text="Workspace" VerticalAlignment="Center" FontWeight="SemiBold" />
                     <ComboBox x:Name="WorkspacePathTextBox" Grid.Column="1" Height="32" Margin="8,0" IsEditable="True" VerticalContentAlignment="Center" />
                     <Button Grid.Column="2" Content="Utwórz / otwórz" Height="32" MinWidth="120" Padding="12,0" Click="OpenWorkspace_Click" />
 
                     <TextBlock Grid.Row="1" Text="CSV" VerticalAlignment="Center" FontWeight="SemiBold" Margin="0,10,0,0" />
                     <TextBox x:Name="CsvPathTextBox" Grid.Row="1" Grid.Column="1" Height="32" Margin="8,10,8,0" VerticalContentAlignment="Center" />
-                    <ComboBox x:Name="HeaderModeComboBox" Grid.Row="1" Grid.Column="2" Width="110" Height="32" SelectedIndex="0" Margin="0,10,12,0">
+                    <ComboBox x:Name="HeaderModeComboBox" Grid.Row="1" Grid.Column="2" Width="118" Height="32" SelectedIndex="0" Margin="0,10,12,0">
                         <ComboBoxItem Content="Nagłówek: auto" Tag="Auto" />
                         <ComboBoxItem Content="Nagłówek: tak" Tag="Yes" />
                         <ComboBoxItem Content="Nagłówek: nie" Tag="No" />
@@ -65,7 +64,7 @@
 
             <Grid Grid.Row="1" Margin="0,14,0,0">
                 <Grid.ColumnDefinitions>
-                    <ColumnDefinition Width="280" />
+                    <ColumnDefinition Width="300" />
                     <ColumnDefinition Width="*" />
                 </Grid.ColumnDefinitions>
 
@@ -85,12 +84,20 @@
                             <TextBox x:Name="ImportNameTextBox" Grid.Row="1" Height="28" Margin="0,8,8,0" VerticalContentAlignment="Center" />
                             <Button Grid.Row="1" Grid.Column="1" Content="Zmień nazwę" Height="28" Margin="0,8,0,0" Padding="10,0" Click="RenameImport_Click" />
                         </Grid>
-                        <GroupBox DockPanel.Dock="Bottom" Header="Historia operacji" Margin="0,10,0,0" Height="150">
+
+                        <GroupBox DockPanel.Dock="Bottom" Header="Historia operacji" Margin="0,10,0,0" Height="160">
                             <DockPanel>
                                 <Button DockPanel.Dock="Bottom" Content="Usuń wynik" Height="28" Margin="0,6,0,0" Click="DeleteOperation_Click" />
-                                <ListBox x:Name="OperationsListBox" DisplayMemberPath="DisplayName" SelectionChanged="OperationsListBox_SelectionChanged" />
+                                <ListBox x:Name="OperationsListBox" SelectionChanged="OperationsListBox_SelectionChanged">
+                                    <ListBox.ItemTemplate>
+                                        <DataTemplate>
+                                            <TextBlock Text="{Binding DisplayName}" TextTrimming="CharacterEllipsis" ToolTip="{Binding DisplayName}" />
+                                        </DataTemplate>
+                                    </ListBox.ItemTemplate>
+                                </ListBox>
                             </DockPanel>
                         </GroupBox>
+
                         <Grid DockPanel.Dock="Bottom" Margin="0,10,0,0">
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="*" />
@@ -103,7 +110,14 @@
                             </ComboBox>
                             <Button Grid.Column="1" Content="Eksportuj" Height="30" Margin="8,0,0,0" Padding="12,0" Click="ExportTable_Click" />
                         </Grid>
-                        <ListBox x:Name="ImportsListBox" DisplayMemberPath="DisplayName" SelectionChanged="ImportsListBox_SelectionChanged" />
+
+                        <ListBox x:Name="ImportsListBox" SelectionChanged="ImportsListBox_SelectionChanged" HorizontalContentAlignment="Stretch">
+                            <ListBox.ItemTemplate>
+                                <DataTemplate>
+                                    <TextBlock Text="{Binding DisplayName}" Padding="2,4" TextTrimming="CharacterEllipsis" ToolTip="{Binding DisplayName}" />
+                                </DataTemplate>
+                            </ListBox.ItemTemplate>
+                        </ListBox>
                     </DockPanel>
                 </Border>
 
@@ -119,66 +133,115 @@
                             <Button x:Name="NextPageButton" Grid.Column="1" Content="Następna" Height="30" MinWidth="90" Margin="8,0,0,0" IsEnabled="False" Click="NextPage_Click" />
                             <TextBlock x:Name="PageStatusText" Grid.Column="2" HorizontalAlignment="Right" VerticalAlignment="Center" Text="Brak danych" />
                         </Grid>
-                        <Grid DockPanel.Dock="Top" Margin="0,0,0,10">
-                            <Grid.RowDefinitions>
-                                <RowDefinition Height="Auto" />
-                                <RowDefinition Height="Auto" />
-                                <RowDefinition Height="Auto" />
-                                <RowDefinition Height="Auto" />
-                            </Grid.RowDefinitions>
-                            <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="*" />
-                                <ColumnDefinition Width="170" />
-                                <ColumnDefinition Width="Auto" />
-                                <ColumnDefinition Width="Auto" />
-                                <ColumnDefinition Width="Auto" />
-                                <ColumnDefinition Width="Auto" />
-                            </Grid.ColumnDefinitions>
-                            <TextBlock x:Name="TableTitleText" Text="Dane" FontSize="16" FontWeight="SemiBold" VerticalAlignment="Center" />
-                            <TextBox x:Name="FilterTextBox" Grid.Column="1" Height="30" Margin="8,0" VerticalContentAlignment="Center" />
-                            <Button Grid.Column="5" Content="Filtruj" Height="30" MinWidth="78" Padding="12,0" Click="RefreshTable_Click" />
-                            <ComboBox x:Name="DuplicateColumnComboBox" Grid.Row="1" Grid.Column="0" Height="30" Margin="0,8,8,0" IsEditable="True" />
-                            <ComboBox x:Name="CompareTableComboBox" Grid.Row="1" Grid.Column="1" Height="30" Margin="0,8,8,0" DisplayMemberPath="DisplayName" SelectionChanged="CompareTableComboBox_SelectionChanged" />
-                            <Button Grid.Row="1" Grid.Column="2" Content="Duplikaty" Height="30" MinWidth="88" Margin="0,8,8,0" Padding="12,0" Click="FindDuplicates_Click" />
-                            <Button Grid.Row="1" Grid.Column="3" Content="Porównaj" Height="30" MinWidth="86" Margin="0,8,8,0" Padding="12,0" Click="CompareTables_Click" />
-                            <Button Grid.Row="1" Grid.Column="4" Content="Połącz" Height="30" MinWidth="76" Margin="0,8,0,0" Padding="12,0" Click="JoinTables_Click" />
-                            <StackPanel Grid.Row="2" Grid.ColumnSpan="6" Orientation="Horizontal" Margin="0,8,0,0">
-                                <TextBlock Text="Duplikaty:" VerticalAlignment="Center" />
-                                <ComboBox x:Name="DuplicateModeComboBox" Width="150" Height="28" Margin="6,0,16,0" SelectedIndex="0">
-                                    <ComboBoxItem Content="Wszystkie wiersze" Tag="AllDuplicateRows" />
-                                    <ComboBoxItem Content="Podsumowanie" Tag="Summary" />
-                                </ComboBox>
-                                <TextBlock Text="Porównanie:" VerticalAlignment="Center" />
-                                <ComboBox x:Name="CompareModeComboBox" Width="140" Height="28" Margin="6,0,16,0" SelectedIndex="0">
-                                    <ComboBoxItem Content="Wszystko ze statusem" Tag="AllWithStatus" />
-                                    <ComboBoxItem Content="Wspólne" Tag="CommonRows" />
-                                    <ComboBoxItem Content="Tylko lewa" Tag="LeftOnly" />
-                                    <ComboBoxItem Content="Tylko prawa" Tag="RightOnly" />
-                                </ComboBox>
-                                <TextBlock Text="Join:" VerticalAlignment="Center" />
-                                <ComboBox x:Name="JoinTypeComboBox" Width="100" Height="28" Margin="6,0,0,0" SelectedIndex="0">
-                                    <ComboBoxItem Content="LEFT" Tag="Left" />
-                                    <ComboBoxItem Content="INNER" Tag="Inner" />
-                                    <ComboBoxItem Content="RIGHT" Tag="Right" />
-                                </ComboBox>
-                            </StackPanel>
-                            <Grid Grid.Row="3" Grid.ColumnSpan="6" Margin="0,8,0,0">
+
+                        <StackPanel DockPanel.Dock="Top" Margin="0,0,0,10">
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="Auto" />
+                                    <ColumnDefinition Width="220" />
+                                    <ColumnDefinition Width="Auto" />
+                                    <ColumnDefinition Width="Auto" />
+                                </Grid.ColumnDefinitions>
+                                <TextBlock x:Name="TableTitleText" Text="Dane" FontSize="16" FontWeight="SemiBold" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
+                                <TextBlock Grid.Column="1" Text="Filtr wierszy" Margin="16,0,8,0" VerticalAlignment="Center" />
+                                <TextBox x:Name="FilterTextBox" Grid.Column="2" Height="30" VerticalContentAlignment="Center" KeyDown="FilterTextBox_KeyDown" />
+                                <Button Grid.Column="3" Content="Wyczyść" Height="30" MinWidth="76" Margin="8,0,0,0" Padding="12,0" Click="ClearFilter_Click" />
+                                <Button Grid.Column="4" Content="Filtruj" Height="30" MinWidth="78" Margin="8,0,0,0" Padding="12,0" Click="RefreshTable_Click" />
+                            </Grid>
+
+                            <Grid Margin="0,10,0,8">
                                 <Grid.ColumnDefinitions>
                                     <ColumnDefinition Width="Auto" />
-                                    <ColumnDefinition Width="*" />
-                                    <ColumnDefinition Width="Auto" />
-                                    <ColumnDefinition Width="*" />
-                                    <ColumnDefinition Width="Auto" />
+                                    <ColumnDefinition Width="360" />
                                     <ColumnDefinition Width="*" />
                                 </Grid.ColumnDefinitions>
-                                <TextBlock Text="Klucze prawe:" VerticalAlignment="Center" />
-                                <TextBox x:Name="RightKeyColumnsTextBox" Grid.Column="1" Height="28" Margin="6,0,14,0" VerticalContentAlignment="Center" />
-                                <TextBlock Grid.Column="2" Text="Kolumny lewe:" VerticalAlignment="Center" />
-                                <TextBox x:Name="LeftOutputColumnsTextBox" Grid.Column="3" Height="28" Margin="6,0,14,0" VerticalContentAlignment="Center" />
-                                <TextBlock Grid.Column="4" Text="Kolumny prawe:" VerticalAlignment="Center" />
-                                <TextBox x:Name="RightOutputColumnsTextBox" Grid.Column="5" Height="28" Margin="6,0,0,0" VerticalContentAlignment="Center" />
+                                <TextBlock Text="Klucze tabeli lewej" VerticalAlignment="Center" />
+                                <ComboBox x:Name="DuplicateColumnComboBox" Grid.Column="1" Height="30" Margin="10,0,0,0" IsEditable="True" ToolTip="Wybierz jedną kolumnę lub wpisz kilka nazw oddzielonych przecinkami" />
                             </Grid>
-                        </Grid>
+
+                            <TabControl MinHeight="108" Padding="4">
+                                <TabItem Header="Duplikaty">
+                                    <Grid Margin="8">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="Auto" />
+                                            <ColumnDefinition Width="200" />
+                                            <ColumnDefinition Width="Auto" />
+                                            <ColumnDefinition Width="*" />
+                                            <ColumnDefinition Width="Auto" />
+                                        </Grid.ColumnDefinitions>
+                                        <TextBlock Text="Widok wyniku" VerticalAlignment="Center" />
+                                        <ComboBox x:Name="DuplicateModeComboBox" Grid.Column="1" Height="30" Margin="10,0,20,0" SelectedIndex="0">
+                                            <ComboBoxItem Content="Wszystkie wiersze" Tag="AllDuplicateRows" />
+                                            <ComboBoxItem Content="Podsumowanie" Tag="Summary" />
+                                        </ComboBox>
+                                        <CheckBox x:Name="IgnoreEmptyKeysCheckBox" Grid.Column="2" Content="Pomiń puste klucze" IsChecked="True" VerticalAlignment="Center" />
+                                        <Button Grid.Column="4" Content="Znajdź duplikaty" Height="32" MinWidth="132" Padding="14,0" Click="FindDuplicates_Click" />
+                                    </Grid>
+                                </TabItem>
+
+                                <TabItem Header="Porównaj">
+                                    <Grid Margin="8">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="Auto" />
+                                            <ColumnDefinition Width="*" />
+                                            <ColumnDefinition Width="Auto" />
+                                            <ColumnDefinition Width="*" />
+                                            <ColumnDefinition Width="Auto" />
+                                            <ColumnDefinition Width="180" />
+                                            <ColumnDefinition Width="Auto" />
+                                        </Grid.ColumnDefinitions>
+                                        <TextBlock Text="Tabela prawa" VerticalAlignment="Center" />
+                                        <ComboBox x:Name="CompareTableComboBox" Grid.Column="1" Height="30" Margin="10,0,18,0" DisplayMemberPath="DisplayName" SelectionChanged="CompareTableComboBox_SelectionChanged" />
+                                        <TextBlock Grid.Column="2" Text="Klucze prawe" VerticalAlignment="Center" />
+                                        <TextBox x:Name="RightKeyColumnsTextBox" Grid.Column="3" Height="30" Margin="10,0,18,0" VerticalContentAlignment="Center" />
+                                        <TextBlock Grid.Column="4" Text="Wynik" VerticalAlignment="Center" />
+                                        <ComboBox x:Name="CompareModeComboBox" Grid.Column="5" Height="30" Margin="10,0,18,0" SelectedIndex="0">
+                                            <ComboBoxItem Content="Wszystko ze statusem" Tag="AllWithStatus" />
+                                            <ComboBoxItem Content="Wspólne" Tag="CommonRows" />
+                                            <ComboBoxItem Content="Tylko lewa" Tag="LeftOnly" />
+                                            <ComboBoxItem Content="Tylko prawa" Tag="RightOnly" />
+                                        </ComboBox>
+                                        <Button Grid.Column="6" Content="Porównaj tabele" Height="32" MinWidth="126" Padding="14,0" Click="CompareTables_Click" />
+                                    </Grid>
+                                </TabItem>
+
+                                <TabItem Header="Połącz">
+                                    <Grid Margin="8">
+                                        <Grid.RowDefinitions>
+                                            <RowDefinition Height="Auto" />
+                                            <RowDefinition Height="Auto" />
+                                        </Grid.RowDefinitions>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="Auto" />
+                                            <ColumnDefinition Width="*" />
+                                            <ColumnDefinition Width="Auto" />
+                                            <ColumnDefinition Width="*" />
+                                            <ColumnDefinition Width="Auto" />
+                                            <ColumnDefinition Width="110" />
+                                            <ColumnDefinition Width="Auto" />
+                                        </Grid.ColumnDefinitions>
+                                        <TextBlock Text="Tabela prawa" VerticalAlignment="Center" />
+                                        <ComboBox x:Name="JoinTableComboBox" Grid.Column="1" Height="30" Margin="10,0,18,0" DisplayMemberPath="DisplayName" SelectionChanged="JoinTableComboBox_SelectionChanged" />
+                                        <TextBlock Grid.Column="2" Text="Klucze prawe" VerticalAlignment="Center" />
+                                        <TextBox x:Name="JoinRightKeyColumnsTextBox" Grid.Column="3" Height="30" Margin="10,0,18,0" VerticalContentAlignment="Center" />
+                                        <TextBlock Grid.Column="4" Text="Typ" VerticalAlignment="Center" />
+                                        <ComboBox x:Name="JoinTypeComboBox" Grid.Column="5" Height="30" Margin="10,0,18,0" SelectedIndex="0">
+                                            <ComboBoxItem Content="LEFT" Tag="Left" />
+                                            <ComboBoxItem Content="INNER" Tag="Inner" />
+                                            <ComboBoxItem Content="RIGHT" Tag="Right" />
+                                        </ComboBox>
+                                        <Button Grid.Column="6" Content="Połącz tabele" Height="32" MinWidth="126" Padding="14,0" Click="JoinTables_Click" />
+
+                                        <TextBlock Grid.Row="1" Text="Kolumny lewe" Margin="0,8,0,0" VerticalAlignment="Center" />
+                                        <TextBox x:Name="LeftOutputColumnsTextBox" Grid.Row="1" Grid.Column="1" Height="28" Margin="10,8,18,0" VerticalContentAlignment="Center" />
+                                        <TextBlock Grid.Row="1" Grid.Column="2" Text="Kolumny prawe" Margin="0,8,0,0" VerticalAlignment="Center" />
+                                        <TextBox x:Name="RightOutputColumnsTextBox" Grid.Row="1" Grid.Column="3" Grid.ColumnSpan="3" Height="28" Margin="10,8,18,0" VerticalContentAlignment="Center" />
+                                    </Grid>
+                                </TabItem>
+                            </TabControl>
+                        </StackPanel>
+
                         <DataGrid x:Name="DataGrid"
                                   AutoGenerateColumns="False"
                                   IsReadOnly="True"

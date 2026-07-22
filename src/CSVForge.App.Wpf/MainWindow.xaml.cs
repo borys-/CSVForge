@@ -14,6 +14,7 @@ using Microsoft.Win32;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Data;
+using System.Windows.Input;
 using Microsoft.Data.Sqlite;
 
 namespace CSVForge.App.Wpf;
@@ -226,8 +227,14 @@ public partial class MainWindow : Window
     private async void FindDuplicates_Click(object sender, RoutedEventArgs e)
     {
         IReadOnlyList<string> keyColumns = SelectedKeyColumns();
-        if (_selectedImport is null || keyColumns.Count == 0)
+        if (_selectedImport is null)
         {
+            ShowValidationMessage("Wybierz tabelę, w której chcesz znaleźć duplikaty.");
+            return;
+        }
+        if (keyColumns.Count == 0)
+        {
+            ShowValidationMessage("Wybierz co najmniej jedną kolumnę klucza.");
             return;
         }
 
@@ -237,7 +244,7 @@ public partial class MainWindow : Window
                 _selectedImport.TableName,
                 keyColumns,
                 SelectedEnum(DuplicateModeComboBox, DuplicateSearchMode.AllDuplicateRows),
-                true));
+                IgnoreEmptyKeysCheckBox.IsChecked == true));
 
             _adHocTableName = result.ResultTableName;
             _pageOffset = 0;
@@ -249,11 +256,20 @@ public partial class MainWindow : Window
     private async void CompareTables_Click(object sender, RoutedEventArgs e)
     {
         IReadOnlyList<string> rightKeys = RightKeyColumns();
-        if (_selectedImport is null ||
-            CompareTableComboBox.SelectedItem is not CsvImport rightImport ||
-            SelectedKeyColumns() is not { Count: > 0 } keyColumns ||
-            rightKeys.Count != keyColumns.Count)
+        if (_selectedImport is null)
         {
+            ShowValidationMessage("Wybierz tabelę lewą z listy tabel.");
+            return;
+        }
+        if (CompareTableComboBox.SelectedItem is not CsvImport rightImport)
+        {
+            ShowValidationMessage("Wybierz tabelę prawą do porównania.");
+            return;
+        }
+        IReadOnlyList<string> keyColumns = SelectedKeyColumns();
+        if (keyColumns.Count == 0 || rightKeys.Count != keyColumns.Count)
+        {
+            ShowValidationMessage("Podaj taką samą liczbę kluczy dla lewej i prawej tabeli.");
             return;
         }
 
@@ -275,12 +291,21 @@ public partial class MainWindow : Window
 
     private async void JoinTables_Click(object sender, RoutedEventArgs e)
     {
-        IReadOnlyList<string> rightKeys = RightKeyColumns();
-        if (_selectedImport is null ||
-            CompareTableComboBox.SelectedItem is not CsvImport rightImport ||
-            SelectedKeyColumns() is not { Count: > 0 } keyColumns ||
-            rightKeys.Count != keyColumns.Count)
+        IReadOnlyList<string> rightKeys = ParseColumns(JoinRightKeyColumnsTextBox.Text);
+        if (_selectedImport is null)
         {
+            ShowValidationMessage("Wybierz tabelę lewą z listy tabel.");
+            return;
+        }
+        if (JoinTableComboBox.SelectedItem is not CsvImport rightImport)
+        {
+            ShowValidationMessage("Wybierz tabelę prawą do połączenia.");
+            return;
+        }
+        IReadOnlyList<string> keyColumns = SelectedKeyColumns();
+        if (keyColumns.Count == 0 || rightKeys.Count != keyColumns.Count)
+        {
+            ShowValidationMessage("Podaj taką samą liczbę kluczy dla lewej i prawej tabeli.");
             return;
         }
 
@@ -348,6 +373,7 @@ public partial class MainWindow : Window
         IReadOnlyList<CsvImport> imports = await _listImportedTables.ExecuteAsync();
         ImportsListBox.ItemsSource = imports;
         CompareTableComboBox.ItemsSource = imports;
+        JoinTableComboBox.ItemsSource = imports;
     }
 
     private async Task RefreshOperationsAsync()
@@ -498,6 +524,7 @@ public partial class MainWindow : Window
                 Header = column,
                 SortMemberPath = column,
                 Binding = new Binding($"[{column}]") { Mode = BindingMode.OneWay },
+                Width = DataGridLength.Auto,
                 MinWidth = 100,
                 MaxWidth = 600
             });
@@ -521,6 +548,21 @@ public partial class MainWindow : Window
         if (CompareTableComboBox.SelectedItem is not CsvImport import)
         {
             RightKeyColumnsTextBox.Text = string.Empty;
+            return;
+        }
+
+        string[] columns = import.Columns.Select(column => column.Name).ToArray();
+        IReadOnlyList<string> leftKeys = SelectedKeyColumns();
+        RightKeyColumnsTextBox.Text = leftKeys.All(key => columns.Contains(key, StringComparer.OrdinalIgnoreCase))
+            ? string.Join(",", leftKeys)
+            : columns.FirstOrDefault() ?? string.Empty;
+    }
+
+    private void JoinTableComboBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (JoinTableComboBox.SelectedItem is not CsvImport import)
+        {
+            JoinRightKeyColumnsTextBox.Text = string.Empty;
             RightOutputColumnsTextBox.Text = string.Empty;
             return;
         }
@@ -528,9 +570,29 @@ public partial class MainWindow : Window
         string[] columns = import.Columns.Select(column => column.Name).ToArray();
         RightOutputColumnsTextBox.Text = string.Join(",", columns);
         IReadOnlyList<string> leftKeys = SelectedKeyColumns();
-        RightKeyColumnsTextBox.Text = leftKeys.All(key => columns.Contains(key, StringComparer.OrdinalIgnoreCase))
+        JoinRightKeyColumnsTextBox.Text = leftKeys.All(key => columns.Contains(key, StringComparer.OrdinalIgnoreCase))
             ? string.Join(",", leftKeys)
             : columns.FirstOrDefault() ?? string.Empty;
+    }
+
+    private async void FilterTextBox_KeyDown(object sender, KeyEventArgs e)
+    {
+        if (e.Key != Key.Enter)
+        {
+            return;
+        }
+
+        e.Handled = true;
+        _pageOffset = 0;
+        await RefreshSelectedTableAsync();
+    }
+
+    private async void ClearFilter_Click(object sender, RoutedEventArgs e)
+    {
+        FilterTextBox.Clear();
+        _pageOffset = 0;
+        await RefreshSelectedTableAsync();
+        FilterTextBox.Focus();
     }
 
     private static T SelectedEnum<T>(ComboBox comboBox, T fallback) where T : struct, Enum
@@ -538,6 +600,11 @@ public partial class MainWindow : Window
         return comboBox.SelectedItem is ComboBoxItem { Tag: string value } && Enum.TryParse(value, true, out T parsed)
             ? parsed
             : fallback;
+    }
+
+    private void ShowValidationMessage(string message)
+    {
+        MessageBox.Show(this, message, "CSVForge", MessageBoxButton.OK, MessageBoxImage.Information);
     }
 
     private ImportRequest CreateImportRequest(string path, string displayName)

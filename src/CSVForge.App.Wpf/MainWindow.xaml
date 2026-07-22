@@ -131,7 +131,7 @@
                                 <ComboBox x:Name="DuplicateColumnComboBox" Grid.Column="1" Height="30" Margin="10,0,0,0" IsEditable="True" ToolTip="Wybierz jedną kolumnę lub wpisz kilka nazw oddzielonych przecinkami" />
                             </Grid>
 
-                            <TabControl MinHeight="108" Padding="4">
+                            <TabControl MinHeight="156" Padding="4">
                                 <TabItem Header="Duplikaty">
                                     <Grid Margin="8">
                                         <Grid.ColumnDefinitions>
@@ -156,10 +156,9 @@
                                         <Grid.RowDefinitions>
                                             <RowDefinition Height="Auto" />
                                             <RowDefinition Height="Auto" />
+                                            <RowDefinition Height="Auto" />
                                         </Grid.RowDefinitions>
                                         <Grid.ColumnDefinitions>
-                                            <ColumnDefinition Width="Auto" />
-                                            <ColumnDefinition Width="*" />
                                             <ColumnDefinition Width="Auto" />
                                             <ColumnDefinition Width="*" />
                                             <ColumnDefinition Width="Auto" />
@@ -167,21 +166,21 @@
                                             <ColumnDefinition Width="Auto" />
                                         </Grid.ColumnDefinitions>
                                         <TextBlock Text="Lewy plik" VerticalAlignment="Center" />
-                                        <TextBox x:Name="CompareLeftFileTextBox" Grid.Column="1" Grid.ColumnSpan="2" Height="30" Margin="10,0,18,6"
-                                                 IsReadOnly="True" VerticalContentAlignment="Center" />
-                                        <TextBlock Grid.Column="3" Text="Prawy plik" VerticalAlignment="Center" />
-                                        <ComboBox x:Name="CompareTableComboBox" Grid.Column="4" Grid.ColumnSpan="3" Height="30" Margin="10,0,0,6"
+                                        <ComboBox x:Name="CompareLeftTableComboBox" Grid.Column="1" Grid.ColumnSpan="4" Height="30" Margin="10,0,0,6"
+                                                  DisplayMemberPath="SourcePath" SelectionChanged="CompareLeftTableComboBox_SelectionChanged" />
+                                        <TextBlock Grid.Row="1" Text="Prawy plik" VerticalAlignment="Center" />
+                                        <ComboBox x:Name="CompareTableComboBox" Grid.Row="1" Grid.Column="1" Grid.ColumnSpan="4" Height="30" Margin="10,0,0,6"
                                                   DisplayMemberPath="SourcePath" SelectionChanged="CompareTableComboBox_SelectionChanged" />
-                                        <TextBlock Grid.Row="1" Text="Klucze prawe" VerticalAlignment="Center" />
-                                        <TextBox x:Name="RightKeyColumnsTextBox" Grid.Row="1" Grid.Column="1" Grid.ColumnSpan="3" Height="30" Margin="10,0,18,0" VerticalContentAlignment="Center" />
-                                        <TextBlock Grid.Row="1" Grid.Column="4" Text="Wynik" VerticalAlignment="Center" />
-                                        <ComboBox x:Name="CompareModeComboBox" Grid.Row="1" Grid.Column="5" Height="30" Margin="10,0,18,0" SelectedIndex="0">
+                                        <TextBlock Grid.Row="2" Text="Klucze prawe" VerticalAlignment="Center" />
+                                        <TextBox x:Name="RightKeyColumnsTextBox" Grid.Row="2" Grid.Column="1" Height="30" Margin="10,0,18,0" VerticalContentAlignment="Center" />
+                                        <TextBlock Grid.Row="2" Grid.Column="2" Text="Wynik" VerticalAlignment="Center" />
+                                        <ComboBox x:Name="CompareModeComboBox" Grid.Row="2" Grid.Column="3" Height="30" Margin="10,0,18,0" SelectedIndex="0">
                                             <ComboBoxItem Content="Wszystko ze statusem" Tag="AllWithStatus" />
                                             <ComboBoxItem Content="Wspólne" Tag="CommonRows" />
                                             <ComboBoxItem Content="Tylko lewa" Tag="LeftOnly" />
                                             <ComboBoxItem Content="Tylko prawa" Tag="RightOnly" />
                                         </ComboBox>
-                                        <Button Grid.Row="1" Grid.Column="6" Content="Porównaj pliki" Height="32" MinWidth="126" Padding="14,0" Click="CompareTables_Click" />
+                                        <Button Grid.Row="2" Grid.Column="4" Content="Porównaj pliki" Height="32" MinWidth="126" Padding="14,0" Click="CompareTables_Click" />
                                     </Grid>
                                 </TabItem>
 

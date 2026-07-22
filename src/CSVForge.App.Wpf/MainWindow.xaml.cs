@@ -55,6 +55,7 @@ public partial class MainWindow : Window
     private string? _currentWorkspacePath;
     private bool _workspaceSelectionReady;
     private bool _ignoreWorkspaceSelection;
+    private bool _updatingComparisonFiles;
 
     public MainWindow(
         ICreateWorkspaceUseCase createWorkspace,
@@ -288,7 +289,7 @@ public partial class MainWindow : Window
     private async void CompareTables_Click(object sender, RoutedEventArgs e)
     {
         IReadOnlyList<string> rightKeys = RightKeyColumns();
-        if (_selectedImport is null)
+        if (CompareLeftTableComboBox.SelectedItem is not CsvImport leftImport)
         {
             ShowValidationMessage("Wybierz lewy plik z listy plików.");
             return;
@@ -298,7 +299,7 @@ public partial class MainWindow : Window
             ShowValidationMessage("Wybierz prawy plik do porównania.");
             return;
         }
-        if (rightImport.Id == _selectedImport.Id)
+        if (rightImport.Id == leftImport.Id)
         {
             ShowValidationMessage("Lewy i prawy plik muszą być różne.");
             return;
@@ -313,7 +314,7 @@ public partial class MainWindow : Window
         await RunUiActionAsync(async () =>
         {
             OperationResult result = await _compareDatasets.ExecuteAsync(new DatasetCompareRequest(
-                _selectedImport.TableName,
+                leftImport.TableName,
                 rightImport.TableName,
                 rightKeys,
                 keyColumns,
@@ -547,17 +548,36 @@ public partial class MainWindow : Window
 
     private void UpdateComparisonFiles()
     {
-        CompareLeftFileTextBox.Text = _selectedImport?.SourcePath ?? string.Empty;
-        CsvImport? previousSelection = CompareTableComboBox.SelectedItem as CsvImport;
-        IEnumerable<CsvImport> imports = ImportsListBox.ItemsSource as IEnumerable<CsvImport> ?? [];
-        CsvImport[] availableRightFiles = imports
-            .Where(import => _selectedImport is null || import.Id != _selectedImport.Id)
-            .ToArray();
+        _updatingComparisonFiles = true;
+        try
+        {
+            CsvImport? previousRight = CompareTableComboBox.SelectedItem as CsvImport;
+            CsvImport[] imports = (ImportsListBox.ItemsSource as IEnumerable<CsvImport> ?? []).ToArray();
+            CompareLeftTableComboBox.ItemsSource = imports;
+            CompareLeftTableComboBox.SelectedItem = _selectedImport is null
+                ? null
+                : imports.FirstOrDefault(import => import.Id == _selectedImport.Id);
 
-        CompareTableComboBox.ItemsSource = availableRightFiles;
-        CompareTableComboBox.SelectedItem = previousSelection is not null
-            ? availableRightFiles.FirstOrDefault(import => import.Id == previousSelection.Id)
-            : null;
+            CsvImport[] availableRightFiles = imports
+                .Where(import => _selectedImport is null || import.Id != _selectedImport.Id)
+                .ToArray();
+            CompareTableComboBox.ItemsSource = availableRightFiles;
+            CompareTableComboBox.SelectedItem = previousRight is not null
+                ? availableRightFiles.FirstOrDefault(import => import.Id == previousRight.Id) ?? availableRightFiles.FirstOrDefault()
+                : availableRightFiles.FirstOrDefault();
+        }
+        finally
+        {
+            _updatingComparisonFiles = false;
+        }
+    }
+
+    private void CompareLeftTableComboBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (!_updatingComparisonFiles && CompareLeftTableComboBox.SelectedItem is CsvImport leftImport)
+        {
+            ImportsListBox.SelectedItem = ImportsListBox.Items.Cast<CsvImport>().FirstOrDefault(import => import.Id == leftImport.Id);
+        }
     }
 
     private async Task RefreshSelectedTableAsync()

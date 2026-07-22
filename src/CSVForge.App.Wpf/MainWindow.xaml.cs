@@ -3,6 +3,7 @@ using System.IO;
 using CSVForge.Application.Abstractions;
 using CSVForge.Application.Export;
 using CSVForge.Application.Operations;
+using CSVForge.Application.Csv;
 using CSVForge.Application.Tables;
 using CSVForge.Domain.Imports;
 using CSVForge.Domain.Operations;
@@ -19,6 +20,7 @@ public partial class MainWindow : Window
     private readonly ICreateWorkspaceUseCase _createWorkspace;
     private readonly IOpenWorkspaceUseCase _openWorkspace;
     private readonly IImportCsvUseCase _importCsv;
+    private readonly IPreviewCsvUseCase _previewCsv;
     private readonly IListImportedTablesUseCase _listImportedTables;
     private readonly IBrowseTableUseCase _browseTable;
     private readonly IFindDuplicatesUseCase _findDuplicates;
@@ -38,6 +40,7 @@ public partial class MainWindow : Window
         ICreateWorkspaceUseCase createWorkspace,
         IOpenWorkspaceUseCase openWorkspace,
         IImportCsvUseCase importCsv,
+        IPreviewCsvUseCase previewCsv,
         IListImportedTablesUseCase listImportedTables,
         IBrowseTableUseCase browseTable,
         IFindDuplicatesUseCase findDuplicates,
@@ -50,6 +53,7 @@ public partial class MainWindow : Window
         _createWorkspace = createWorkspace;
         _openWorkspace = openWorkspace;
         _importCsv = importCsv;
+        _previewCsv = previewCsv;
         _listImportedTables = listImportedTables;
         _browseTable = browseTable;
         _findDuplicates = findDuplicates;
@@ -119,6 +123,27 @@ public partial class MainWindow : Window
             await RefreshImportsAsync();
             SelectImport(result.Import.Id);
         }, "Import zakończony");
+    }
+
+    private async void PreviewCsv_Click(object sender, RoutedEventArgs e)
+    {
+        string path = CsvPathTextBox.Text.Trim();
+        if (string.IsNullOrWhiteSpace(path))
+        {
+            MessageBox.Show(this, "Wybierz plik CSV do podglądu.", "CSVForge", MessageBoxButton.OK, MessageBoxImage.Information);
+            return;
+        }
+
+        await RunUiActionAsync(async cancellationToken =>
+        {
+            CsvPreview preview = await _previewCsv.ExecuteAsync(new ImportRequest(path, Path.GetFileNameWithoutExtension(path), true, null, null), cancellationToken);
+            List<Dictionary<string, string?>> rows = preview.Rows.Select(row => preview.Columns
+                .Select((column, index) => new { column.Name, Value = index < row.Count ? row[index] : null })
+                .ToDictionary(item => item.Name, item => item.Value)).ToList();
+            DataGrid.ItemsSource = rows;
+            TableTitleText.Text = $"Podgląd: {Path.GetFileName(path)} ({preview.Rows.Count} wierszy)";
+            PageStatusText.Text = preview.Errors.Count == 0 ? "CSV poprawny" : $"Błędy: {preview.Errors.Count}";
+        }, "Podgląd gotowy");
     }
 
     private async void ImportsListBox_SelectionChanged(object sender, SelectionChangedEventArgs e)

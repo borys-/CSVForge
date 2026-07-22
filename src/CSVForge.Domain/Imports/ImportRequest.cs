@@ -6,6 +6,6 @@ public sealed record ImportRequest(
     bool HasHeader,
     char? Delimiter,
     string? EncodingName,
-    int BatchSize = 500,
+    int BatchSize = 5000,
     bool AutoDetectHeader = false,
     IReadOnlyList<CsvColumnMapping>? ColumnMappings = null);

@@ -99,7 +99,7 @@ public sealed class CsvImporterServiceTests
         CancelOnProgress progress = new(cancellation);
 
         await Assert.ThrowsAnyAsync<OperationCanceledException>(() => provider.GetRequiredService<IImportCsvUseCase>()
-            .ExecuteAsync(new ImportRequest(csvPath, "Large", true, null, null), progress, cancellation.Token));
+            .ExecuteAsync(new ImportRequest(csvPath, "Large", true, null, null, 500), progress, cancellation.Token));
 
         await using SqliteConnection connection = new($"Data Source={workspacePath}");
         await connection.OpenAsync();

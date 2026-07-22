@@ -114,7 +114,7 @@ public partial class ImportPreviewWindow : Window
                 setting.Name,
                 setting.DataType,
                 setting.Include)).ToArray();
-        return new ImportRequest(_filePath, DisplayNameTextBox.Text.Trim(), mode != "No", null, null, 500, mode == "Auto", mappings);
+        return new ImportRequest(_filePath, DisplayNameTextBox.Text.Trim(), mode != "No", null, null, 5000, mode == "Auto", mappings);
     }
 
     private void ShowPreview(CsvPreview preview)

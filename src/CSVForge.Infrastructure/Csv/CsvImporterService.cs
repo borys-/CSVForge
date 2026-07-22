@@ -175,15 +175,20 @@ internal sealed class CsvImporterService(IWorkspaceContext workspaceContext) : I
     private static async Task<long> InsertBatchAsync(SqliteConnection connection, string tableName, IReadOnlyList<string> columnNames, IReadOnlyList<object?[]> rows, CancellationToken cancellationToken)
     {
         await using SqliteTransaction transaction = (SqliteTransaction)await connection.BeginTransactionAsync(cancellationToken);
+        await using SqliteCommand command = connection.CreateCommand();
+        command.Transaction = transaction;
+        command.CommandText = BuildInsertSql(tableName, columnNames);
+        for (int i = 0; i < columnNames.Count; i++)
+        {
+            command.Parameters.Add(new SqliteParameter($"$p{i}", DBNull.Value));
+        }
+        command.Prepare();
+
         foreach (object?[] row in rows)
         {
-            await using SqliteCommand command = connection.CreateCommand();
-            command.Transaction = transaction;
-            command.CommandText = BuildInsertSql(tableName, columnNames);
-
             for (int i = 0; i < columnNames.Count; i++)
             {
-                command.Parameters.AddWithValue($"$p{i}", row[i] ?? DBNull.Value);
+                command.Parameters[i].Value = row[i] ?? DBNull.Value;
             }
 
             await command.ExecuteNonQueryAsync(cancellationToken);

@@ -64,7 +64,7 @@ static async Task<int> RunAsync(IServiceProvider services, string[] args)
             string file = Required(options, "file");
             string name = options.GetValueOrDefault("name") ?? Path.GetFileNameWithoutExtension(file);
             ImportResult result = await services.GetRequiredService<IImportCsvUseCase>()
-                .ExecuteAsync(new ImportRequest(file, name, !options.ContainsKey("no-header"), Delimiter(options), options.GetValueOrDefault("encoding"), IntOption(options, "batch-size", 500), !options.ContainsKey("no-header")));
+                .ExecuteAsync(new ImportRequest(file, name, !options.ContainsKey("no-header"), Delimiter(options), options.GetValueOrDefault("encoding"), IntOption(options, "batch-size", 5000), !options.ContainsKey("no-header")));
             Console.WriteLine($"Zaimportowano {result.Import.RowCount} wierszy do {result.Import.TableName}.");
             return 0;
         }
@@ -203,7 +203,7 @@ static void PrintHelp()
         CSVForge CLI
 
         workspace --action create|open --path <workspace.db>
-        import --workspace <db> --file <plik.csv> [--name <nazwa>] [--delimiter ;] [--batch-size 500] [--no-header]
+        import --workspace <db> --file <plik.csv> [--name <nazwa>] [--delimiter ;] [--batch-size 5000] [--no-header]
         list-tables --workspace <db>
         duplicates --workspace <db> --table <tabela> --columns <kol1,kol2> [--mode Summary|AllDuplicateRows]
         compare --workspace <db> --left <tabela> --right <tabela> --left-keys <kolumny> --right-keys <kolumny> [--mode AllWithStatus]

@@ -696,7 +696,7 @@ public partial class MainWindow : Window
 
     private ImportRequest CreateImportRequest(string path, string displayName)
     {
-        return new ImportRequest(path, displayName, true, null, null, 500, true);
+        return new ImportRequest(path, displayName, true, null, null, 5000, true);
     }
 
     private async Task RunUiActionAsync(Func<Task> action, string successMessage)

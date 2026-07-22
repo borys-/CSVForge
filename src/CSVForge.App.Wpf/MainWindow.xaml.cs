@@ -23,6 +23,8 @@ public partial class MainWindow : Window
 {
     private const int PageSize = 200;
     private static readonly string RecentWorkspacesPath = Path.Combine(AppPaths.DataDirectory, "recent-workspaces.json");
+    private static readonly string DefaultWorkspacePath = Path.Combine(
+        Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments), "CSVForge", "workspace.db");
 
     private readonly ICreateWorkspaceUseCase _createWorkspace;
     private readonly IOpenWorkspaceUseCase _openWorkspace;
@@ -46,6 +48,7 @@ public partial class MainWindow : Window
     private string? _sortColumn;
     private bool _sortDescending;
     private CancellationTokenSource? _operationCancellation;
+    private string _startupWorkspacePath = DefaultWorkspacePath;
 
     public MainWindow(
         ICreateWorkspaceUseCase createWorkspace,
@@ -79,7 +82,14 @@ public partial class MainWindow : Window
         _deleteOperation = deleteOperation;
 
         InitializeComponent();
-        LoadRecentWorkspaces();
+        _startupWorkspacePath = LoadRecentWorkspaces();
+        Loaded += MainWindow_Loaded;
+    }
+
+    private async void MainWindow_Loaded(object sender, RoutedEventArgs e)
+    {
+        Loaded -= MainWindow_Loaded;
+        await RunUiActionAsync(() => OpenWorkspaceAsync(_startupWorkspacePath), "Workspace gotowy");
     }
 
     private async void OpenWorkspace_Click(object sender, RoutedEventArgs e)
@@ -89,24 +99,30 @@ public partial class MainWindow : Window
             string path = WorkspacePathTextBox.Text.Trim();
             if (string.IsNullOrWhiteSpace(path))
             {
-                path = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments), "CSVForge", "workspace.db");
-                WorkspacePathTextBox.Text = path;
+                path = DefaultWorkspacePath;
             }
-
-            if (File.Exists(path))
-            {
-                await _openWorkspace.ExecuteAsync(path);
-            }
-            else
-            {
-                await _createWorkspace.ExecuteAsync(path);
-            }
-
-            WorkspaceStatusText.Text = path;
-            SaveRecentWorkspace(path);
-            await RefreshImportsAsync();
-            await RefreshOperationsAsync();
+            await OpenWorkspaceAsync(path);
         }, "Workspace gotowy");
+    }
+
+    private async Task OpenWorkspaceAsync(string path)
+    {
+        string fullPath = Path.GetFullPath(path);
+        WorkspacePathTextBox.Text = fullPath;
+
+        if (File.Exists(fullPath))
+        {
+            await _openWorkspace.ExecuteAsync(fullPath);
+        }
+        else
+        {
+            await _createWorkspace.ExecuteAsync(fullPath);
+        }
+
+        WorkspaceStatusText.Text = fullPath;
+        SaveRecentWorkspace(fullPath);
+        await RefreshImportsAsync();
+        await RefreshOperationsAsync();
     }
 
     private async void ChooseCsv_Click(object sender, RoutedEventArgs e)
@@ -696,25 +712,33 @@ public partial class MainWindow : Window
         };
     }
 
-    private void LoadRecentWorkspaces()
+    private string LoadRecentWorkspaces()
     {
         try
         {
             if (!File.Exists(RecentWorkspacesPath))
             {
-                return;
+                WorkspacePathTextBox.ItemsSource = new[] { DefaultWorkspacePath };
+                WorkspacePathTextBox.Text = DefaultWorkspacePath;
+                return DefaultWorkspacePath;
             }
 
-            string[] paths = JsonSerializer.Deserialize<string[]>(File.ReadAllText(RecentWorkspacesPath)) ?? [];
-            WorkspacePathTextBox.ItemsSource = paths.Where(File.Exists).ToArray();
-            if (WorkspacePathTextBox.Items.Count > 0)
-            {
-                WorkspacePathTextBox.SelectedIndex = 0;
-            }
+            string[] paths = (JsonSerializer.Deserialize<string[]>(File.ReadAllText(RecentWorkspacesPath)) ?? [])
+                .Where(path => !string.IsNullOrWhiteSpace(path))
+                .Select(Path.GetFullPath)
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .Take(10)
+                .ToArray();
+            string startupPath = paths.FirstOrDefault() ?? DefaultWorkspacePath;
+            WorkspacePathTextBox.ItemsSource = paths.Length == 0 ? new[] { DefaultWorkspacePath } : paths;
+            WorkspacePathTextBox.Text = startupPath;
+            return startupPath;
         }
-        catch (JsonException)
+        catch (Exception ex) when (ex is JsonException or IOException or UnauthorizedAccessException or ArgumentException)
         {
-            WorkspacePathTextBox.ItemsSource = null;
+            WorkspacePathTextBox.ItemsSource = new[] { DefaultWorkspacePath };
+            WorkspacePathTextBox.Text = DefaultWorkspacePath;
+            return DefaultWorkspacePath;
         }
     }
 

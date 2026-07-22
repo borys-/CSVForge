@@ -20,6 +20,7 @@ public static class DependencyInjection
         services.AddScoped<IExportTableUseCase, ExportTableUseCase>();
         services.AddScoped<IListOperationsUseCase, ListOperationsUseCase>();
         services.AddScoped<IDeleteImportUseCase, DeleteImportUseCase>();
+        services.AddScoped<IRenameImportUseCase, RenameImportUseCase>();
 
         return services;
     }

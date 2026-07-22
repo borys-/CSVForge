@@ -39,6 +39,11 @@ public sealed class DependencyInjectionTests
             return Task.CompletedTask;
         }
 
+        public Task RenameImportAsync(Guid importId, string displayName, CancellationToken cancellationToken)
+        {
+            return Task.CompletedTask;
+        }
+
         public Task<Workspace> OpenAsync(string workspacePath, CancellationToken cancellationToken)
         {
             return Task.FromResult(new Workspace(workspacePath, "Test", DateTimeOffset.UnixEpoch));

@@ -114,6 +114,29 @@ internal sealed class SqliteWorkspaceService(IWorkspaceContext workspaceContext)
         await transaction.CommitAsync(cancellationToken);
     }
 
+    public async Task RenameImportAsync(Guid importId, string displayName, CancellationToken cancellationToken)
+    {
+        if (workspaceContext.CurrentWorkspacePath is null)
+        {
+            throw new InvalidOperationException("Open or create a workspace before renaming imports.");
+        }
+        if (string.IsNullOrWhiteSpace(displayName))
+        {
+            throw new ArgumentException("Import name cannot be empty.", nameof(displayName));
+        }
+
+        await using SqliteConnection connection = SqliteConnectionFactory.Create(workspaceContext.CurrentWorkspacePath);
+        await connection.OpenAsync(cancellationToken);
+        await using SqliteCommand command = connection.CreateCommand();
+        command.CommandText = "UPDATE _workspace_imports SET display_name = $name WHERE id = $id;";
+        command.Parameters.AddWithValue("$name", displayName.Trim());
+        command.Parameters.AddWithValue("$id", importId.ToString());
+        if (await command.ExecuteNonQueryAsync(cancellationToken) == 0)
+        {
+            throw new InvalidOperationException("Import does not exist.");
+        }
+    }
+
     private static string NormalizeWorkspacePath(string workspacePath)
     {
         if (string.IsNullOrWhiteSpace(workspacePath))

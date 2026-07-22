@@ -62,12 +62,18 @@
                 <Border Background="White" BorderBrush="#D8DEE8" BorderThickness="1" CornerRadius="6" Padding="12">
                     <DockPanel>
                         <Grid DockPanel.Dock="Top" Margin="0,0,0,10">
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto" />
+                                <RowDefinition Height="Auto" />
+                            </Grid.RowDefinitions>
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="*" />
                                 <ColumnDefinition Width="Auto" />
                             </Grid.ColumnDefinitions>
                             <TextBlock Text="Tabele" FontSize="16" FontWeight="SemiBold" VerticalAlignment="Center" />
                             <Button Grid.Column="1" Content="Usuń" Height="28" Padding="10,0" Click="DeleteImport_Click" />
+                            <TextBox x:Name="ImportNameTextBox" Grid.Row="1" Height="28" Margin="0,8,8,0" VerticalContentAlignment="Center" />
+                            <Button Grid.Row="1" Grid.Column="1" Content="Zmień nazwę" Height="28" Margin="0,8,0,0" Padding="10,0" Click="RenameImport_Click" />
                         </Grid>
                         <GroupBox DockPanel.Dock="Bottom" Header="Historia operacji" Margin="0,10,0,0" Height="150">
                             <ListBox x:Name="OperationsListBox" DisplayMemberPath="DisplayName" SelectionChanged="OperationsListBox_SelectionChanged" />

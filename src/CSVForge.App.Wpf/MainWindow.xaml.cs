@@ -32,6 +32,7 @@ public partial class MainWindow : Window
     private readonly IExportTableUseCase _exportTable;
     private readonly IListOperationsUseCase _listOperations;
     private readonly IDeleteImportUseCase _deleteImport;
+    private readonly IRenameImportUseCase _renameImport;
 
     private CsvImport? _selectedImport;
     private string? _adHocTableName;
@@ -51,7 +52,8 @@ public partial class MainWindow : Window
         IJoinDatasetsUseCase joinDatasets,
         IExportTableUseCase exportTable,
         IListOperationsUseCase listOperations,
-        IDeleteImportUseCase deleteImport)
+        IDeleteImportUseCase deleteImport,
+        IRenameImportUseCase renameImport)
     {
         _createWorkspace = createWorkspace;
         _openWorkspace = openWorkspace;
@@ -65,6 +67,7 @@ public partial class MainWindow : Window
         _exportTable = exportTable;
         _listOperations = listOperations;
         _deleteImport = deleteImport;
+        _renameImport = renameImport;
 
         InitializeComponent();
         LoadRecentWorkspaces();
@@ -156,6 +159,7 @@ public partial class MainWindow : Window
         _selectedImport = ImportsListBox.SelectedItem as CsvImport;
         _adHocTableName = null;
         _pageOffset = 0;
+        ImportNameTextBox.Text = _selectedImport?.DisplayName ?? string.Empty;
         DuplicateColumnComboBox.ItemsSource = _selectedImport?.Columns.Select(column => column.Name).ToArray();
         DuplicateColumnComboBox.SelectedIndex = DuplicateColumnComboBox.Items.Count > 0 ? 0 : -1;
         await RefreshSelectedTableAsync();
@@ -346,6 +350,23 @@ public partial class MainWindow : Window
             DataGrid.ItemsSource = null;
             await RefreshImportsAsync();
         }, "Import usunięty");
+    }
+
+    private async void RenameImport_Click(object sender, RoutedEventArgs e)
+    {
+        if (_selectedImport is null)
+        {
+            return;
+        }
+
+        string name = ImportNameTextBox.Text.Trim();
+        Guid importId = _selectedImport.Id;
+        await RunUiActionAsync(async cancellationToken =>
+        {
+            await _renameImport.ExecuteAsync(importId, name, cancellationToken);
+            await RefreshImportsAsync();
+            SelectImport(importId);
+        }, "Nazwa zmieniona");
     }
 
     private void SelectImport(Guid importId)

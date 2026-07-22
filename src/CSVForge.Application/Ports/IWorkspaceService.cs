@@ -9,4 +9,5 @@ public interface IWorkspaceService
     Task<Workspace> OpenAsync(string workspacePath, CancellationToken cancellationToken);
     Task<IReadOnlyList<CsvImport>> ListImportsAsync(CancellationToken cancellationToken);
     Task DeleteImportAsync(Guid importId, CancellationToken cancellationToken);
+    Task RenameImportAsync(Guid importId, string displayName, CancellationToken cancellationToken);
 }

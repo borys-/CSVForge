@@ -29,6 +29,7 @@ public partial class MainWindow : Window
     private string? _adHocTableName;
     private int _pageOffset;
     private long _totalRows;
+    private CancellationTokenSource? _operationCancellation;
 
     public MainWindow(
         ICreateWorkspaceUseCase createWorkspace,
@@ -95,7 +96,7 @@ public partial class MainWindow : Window
 
     private async void ImportCsv_Click(object sender, RoutedEventArgs e)
     {
-        await RunUiActionAsync(async () =>
+        await RunUiActionAsync(async cancellationToken =>
         {
             string path = CsvPathTextBox.Text.Trim();
             if (string.IsNullOrWhiteSpace(path))
@@ -105,7 +106,8 @@ public partial class MainWindow : Window
             }
 
             string displayName = Path.GetFileNameWithoutExtension(path);
-            ImportResult result = await _importCsv.ExecuteAsync(new ImportRequest(path, displayName, true, null, null));
+            Progress<ImportProgress> progress = new(value => StatusText.Text = $"Import: {value.ProcessedRows} wierszy");
+            ImportResult result = await _importCsv.ExecuteAsync(new ImportRequest(path, displayName, true, null, null), progress, cancellationToken);
             await RefreshImportsAsync();
             SelectImport(result.Import.Id);
         }, "Import zakończony");
@@ -248,9 +250,9 @@ public partial class MainWindow : Window
             ? tag[0]
             : ';';
 
-        await RunUiActionAsync(async () =>
+        await RunUiActionAsync(async cancellationToken =>
         {
-            ExportResult result = await _exportTable.ExecuteAsync(new ExportTableRequest(tableName, dialog.FileName, delimiter, true));
+            ExportResult result = await _exportTable.ExecuteAsync(new ExportTableRequest(tableName, dialog.FileName, delimiter, true), cancellationToken);
             MessageBox.Show(this, $"Wyeksportowano {result.ExportedRows} wierszy do:\n{result.FilePath}", "CSVForge", MessageBoxButton.OK, MessageBoxImage.Information);
         }, "Eksport zakończony");
     }
@@ -317,16 +319,46 @@ public partial class MainWindow : Window
 
     private async Task RunUiActionAsync(Func<Task> action, string successMessage)
     {
+        await RunUiActionAsync(_ => action(), successMessage);
+    }
+
+    private async Task RunUiActionAsync(Func<CancellationToken, Task> action, string successMessage)
+    {
+        if (_operationCancellation is not null)
+        {
+            await action(_operationCancellation.Token);
+            return;
+        }
+
+        _operationCancellation = new CancellationTokenSource();
         try
         {
             StatusText.Text = "Pracuję...";
-            await action();
+            OperationProgressBar.Visibility = Visibility.Visible;
+            CancelOperationButton.Visibility = Visibility.Visible;
+            await action(_operationCancellation.Token);
             StatusText.Text = successMessage;
+        }
+        catch (OperationCanceledException)
+        {
+            StatusText.Text = "Anulowano";
         }
         catch (Exception ex)
         {
             StatusText.Text = "Błąd";
             MessageBox.Show(this, ex.Message, "CSVForge", MessageBoxButton.OK, MessageBoxImage.Error);
         }
+        finally
+        {
+            OperationProgressBar.Visibility = Visibility.Collapsed;
+            CancelOperationButton.Visibility = Visibility.Collapsed;
+            _operationCancellation.Dispose();
+            _operationCancellation = null;
+        }
+    }
+
+    private void CancelOperation_Click(object sender, RoutedEventArgs e)
+    {
+        _operationCancellation?.Cancel();
     }
 }

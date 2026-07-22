@@ -51,14 +51,7 @@
 
                     <TextBlock Grid.Row="1" Text="CSV" VerticalAlignment="Center" FontWeight="SemiBold" Margin="0,10,0,0" />
                     <TextBox x:Name="CsvPathTextBox" Grid.Row="1" Grid.Column="1" Height="32" Margin="8,10,8,0" VerticalContentAlignment="Center" />
-                    <ComboBox x:Name="HeaderModeComboBox" Grid.Row="1" Grid.Column="2" Width="118" Height="32" SelectedIndex="0" Margin="0,10,12,0">
-                        <ComboBoxItem Content="Nagłówek: auto" Tag="Auto" />
-                        <ComboBoxItem Content="Nagłówek: tak" Tag="Yes" />
-                        <ComboBoxItem Content="Nagłówek: nie" Tag="No" />
-                    </ComboBox>
-                    <Button Grid.Row="1" Grid.Column="3" Content="Wybierz" Height="32" MinWidth="86" Margin="0,10,8,0" Padding="12,0" Click="ChooseCsv_Click" />
-                    <Button Grid.Row="1" Grid.Column="4" Content="Podgląd" Height="32" MinWidth="86" Margin="0,10,8,0" Padding="12,0" Click="PreviewCsv_Click" />
-                    <Button Grid.Row="1" Grid.Column="5" Content="Importuj" Height="32" MinWidth="96" Margin="0,10,0,0" Padding="12,0" Click="ImportCsv_Click" />
+                    <Button Grid.Row="1" Grid.Column="2" Grid.ColumnSpan="4" Content="Wybierz i przygotuj import" Height="32" MinWidth="190" Margin="0,10,0,0" Padding="14,0" Click="ChooseCsv_Click" />
                 </Grid>
             </Border>
 

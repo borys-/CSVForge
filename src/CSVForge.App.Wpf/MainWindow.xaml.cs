@@ -109,7 +109,7 @@ public partial class MainWindow : Window
         }, "Workspace gotowy");
     }
 
-    private void ChooseCsv_Click(object sender, RoutedEventArgs e)
+    private async void ChooseCsv_Click(object sender, RoutedEventArgs e)
     {
         OpenFileDialog dialog = new()
         {
@@ -120,6 +120,17 @@ public partial class MainWindow : Window
         if (dialog.ShowDialog(this) == true)
         {
             CsvPathTextBox.Text = dialog.FileName;
+            ImportPreviewWindow previewWindow = new(_previewCsv, _importCsv, dialog.FileName)
+            {
+                Owner = this
+            };
+
+            if (previewWindow.ShowDialog() == true && previewWindow.ImportedResult is { } result)
+            {
+                await RefreshImportsAsync();
+                SelectImport(result.Import.Id);
+                StatusText.Text = $"Zaimportowano {result.Import.RowCount} wierszy";
+            }
         }
     }
 
@@ -609,8 +620,7 @@ public partial class MainWindow : Window
 
     private ImportRequest CreateImportRequest(string path, string displayName)
     {
-        string mode = HeaderModeComboBox.SelectedItem is ComboBoxItem { Tag: string tag } ? tag : "Auto";
-        return new ImportRequest(path, displayName, mode != "No", null, null, 500, mode == "Auto");
+        return new ImportRequest(path, displayName, true, null, null, 500, true);
     }
 
     private async Task RunUiActionAsync(Func<Task> action, string successMessage)

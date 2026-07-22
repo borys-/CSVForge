@@ -197,7 +197,6 @@ public partial class MainWindow : Window
         _pageOffset = 0;
         _sortColumn = null;
         _sortDescending = false;
-        ImportNameTextBox.Text = _selectedImport?.DisplayName ?? string.Empty;
         DuplicateColumnComboBox.ItemsSource = _selectedImport?.Columns.Select(column => column.Name).ToArray();
         DuplicateColumnComboBox.SelectedIndex = DuplicateColumnComboBox.Items.Count > 0 ? 0 : -1;
         LeftOutputColumnsTextBox.Text = _selectedImport is null ? string.Empty : string.Join(",", _selectedImport.Columns.Select(column => column.Name));
@@ -476,7 +475,13 @@ public partial class MainWindow : Window
             return;
         }
 
-        string name = ImportNameTextBox.Text.Trim();
+        RenameImportWindow dialog = new(_selectedImport.DisplayName) { Owner = this };
+        if (dialog.ShowDialog() != true)
+        {
+            return;
+        }
+
+        string name = dialog.ImportName;
         Guid importId = _selectedImport.Id;
         await RunUiActionAsync(async cancellationToken =>
         {
@@ -484,6 +489,14 @@ public partial class MainWindow : Window
             await RefreshImportsAsync();
             SelectImport(importId);
         }, "Nazwa zmieniona");
+    }
+
+    private void ImportContextMenu_Opened(object sender, RoutedEventArgs e)
+    {
+        if (sender is ContextMenu { PlacementTarget: FrameworkElement { DataContext: CsvImport import } })
+        {
+            ImportsListBox.SelectedItem = import;
+        }
     }
 
     private void SelectImport(Guid importId)

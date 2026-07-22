@@ -63,20 +63,7 @@
 
                 <Border Background="White" BorderBrush="#D8DEE8" BorderThickness="1" CornerRadius="6" Padding="12">
                     <DockPanel>
-                        <Grid DockPanel.Dock="Top" Margin="0,0,0,10">
-                            <Grid.RowDefinitions>
-                                <RowDefinition Height="Auto" />
-                                <RowDefinition Height="Auto" />
-                            </Grid.RowDefinitions>
-                            <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="*" />
-                                <ColumnDefinition Width="Auto" />
-                            </Grid.ColumnDefinitions>
-                            <TextBlock Text="Tabele" FontSize="16" FontWeight="SemiBold" VerticalAlignment="Center" />
-                            <Button Grid.Column="1" Content="Usuń" Height="28" Padding="10,0" Click="DeleteImport_Click" />
-                            <TextBox x:Name="ImportNameTextBox" Grid.Row="1" Height="28" Margin="0,8,8,0" VerticalContentAlignment="Center" />
-                            <Button Grid.Row="1" Grid.Column="1" Content="Zmień nazwę" Height="28" Margin="0,8,0,0" Padding="10,0" Click="RenameImport_Click" />
-                        </Grid>
+                        <TextBlock DockPanel.Dock="Top" Text="Tabele" FontSize="16" FontWeight="SemiBold" Margin="0,0,0,10" />
 
                         <GroupBox DockPanel.Dock="Bottom" Header="Historia operacji" Margin="0,10,0,0" Height="160">
                             <DockPanel>
@@ -105,6 +92,20 @@
                         </Grid>
 
                         <ListBox x:Name="ImportsListBox" SelectionChanged="ImportsListBox_SelectionChanged" HorizontalContentAlignment="Stretch">
+                            <ListBox.ItemContainerStyle>
+                                <Style TargetType="ListBoxItem">
+                                    <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+                                    <Setter Property="ContextMenu">
+                                        <Setter.Value>
+                                            <ContextMenu Opened="ImportContextMenu_Opened">
+                                                <MenuItem Header="Zmień nazwę" Click="RenameImport_Click" />
+                                                <Separator />
+                                                <MenuItem Header="Usuń" Click="DeleteImport_Click" />
+                                            </ContextMenu>
+                                        </Setter.Value>
+                                    </Setter>
+                                </Style>
+                            </ListBox.ItemContainerStyle>
                             <ListBox.ItemTemplate>
                                 <DataTemplate>
                                     <TextBlock Text="{Binding DisplayName}" Padding="2,4" TextTrimming="CharacterEllipsis" ToolTip="{Binding DisplayName}" />

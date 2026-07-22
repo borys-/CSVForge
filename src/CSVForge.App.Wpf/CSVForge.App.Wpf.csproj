@@ -20,6 +20,7 @@
     <Version>0.1.0</Version>
     <AssemblyName>CSVForge</AssemblyName>
     <Product>CSVForge</Product>
+    <ApplicationIcon>..\..\assets\app\CSVForge.ico</ApplicationIcon>
   </PropertyGroup>
 
 </Project>

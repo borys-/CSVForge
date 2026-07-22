@@ -8,3 +8,4 @@
 - Added CSV export with UTF-8 BOM.
 - Added WPF workflows, operation history, progress, and cancellation.
 - Added scriptable CLI commands.
+- Added branded application assets and reproducible ZIP/MSIX packaging.

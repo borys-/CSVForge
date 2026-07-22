@@ -36,7 +36,7 @@ dotnet publish src/CSVForge.App.Wpf -p:PublishProfile=SelfContained
 
 Artifacts are written under `artifacts/publish/`. The framework-dependent build requires the .NET 10 Desktop Runtime; the self-contained build includes its runtime.
 
-Run `tools/Package-Release.ps1` to publish both variants and create versioned Windows ZIP packages under `artifacts/packages/`.
+Run `tools/Package-Release.ps1` to publish both variants and create versioned Windows ZIP packages plus an MSIX package under `artifacts/packages/`. Pass `-CertificateThumbprint` for a certificate whose subject is `CN=CSVForge` to sign the MSIX; without it, the package is intentionally left unsigned for CI signing.
 
 ## Performance checks
 

@@ -656,11 +656,13 @@ public partial class MainWindow : Window
     {
         if (CompareTableComboBox.SelectedItem is not CsvImport import)
         {
+            RightKeyColumnsTextBox.ItemsSource = null;
             RightKeyColumnsTextBox.Text = string.Empty;
             return;
         }
 
         string[] columns = import.Columns.Select(column => column.Name).ToArray();
+        RightKeyColumnsTextBox.ItemsSource = columns;
         IReadOnlyList<string> leftKeys = SelectedKeyColumns();
         RightKeyColumnsTextBox.Text = leftKeys.All(key => columns.Contains(key, StringComparer.OrdinalIgnoreCase))
             ? string.Join(",", leftKeys)

@@ -172,7 +172,8 @@
                                         <ComboBox x:Name="CompareTableComboBox" Grid.Row="1" Grid.Column="1" Grid.ColumnSpan="4" Height="30" Margin="10,0,0,6"
                                                   DisplayMemberPath="SourcePath" SelectionChanged="CompareTableComboBox_SelectionChanged" />
                                         <TextBlock Grid.Row="2" Text="Klucze prawe" VerticalAlignment="Center" />
-                                        <TextBox x:Name="RightKeyColumnsTextBox" Grid.Row="2" Grid.Column="1" Height="30" Margin="10,0,18,0" VerticalContentAlignment="Center" />
+                                        <ComboBox x:Name="RightKeyColumnsTextBox" Grid.Row="2" Grid.Column="1" Height="30" Margin="10,0,18,0"
+                                                  IsEditable="True" ToolTip="Wybierz jedną kolumnę lub wpisz kilka nazw oddzielonych przecinkami" />
                                         <TextBlock Grid.Row="2" Grid.Column="2" Text="Wynik" VerticalAlignment="Center" />
                                         <ComboBox x:Name="CompareModeComboBox" Grid.Row="2" Grid.Column="3" Height="30" Margin="10,0,18,0" SelectedIndex="0">
                                             <ComboBoxItem Content="Wszystko ze statusem" Tag="AllWithStatus" />

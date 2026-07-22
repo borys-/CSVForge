@@ -1,4 +1,5 @@
 using System.Collections.ObjectModel;
+using System.Diagnostics;
 using System.IO;
 using System.Text.Json;
 using CSVForge.Application.Abstractions;
@@ -11,14 +12,14 @@ using CSVForge.Domain.Operations;
 using Microsoft.Win32;
 using System.Windows;
 using System.Windows.Controls;
+using Microsoft.Data.Sqlite;
 
 namespace CSVForge.App.Wpf;
 
 public partial class MainWindow : Window
 {
     private const int PageSize = 200;
-    private static readonly string RecentWorkspacesPath = Path.Combine(
-        Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "CSVForge", "recent-workspaces.json");
+    private static readonly string RecentWorkspacesPath = Path.Combine(AppPaths.DataDirectory, "recent-workspaces.json");
 
     private readonly ICreateWorkspaceUseCase _createWorkspace;
     private readonly IOpenWorkspaceUseCase _openWorkspace;
@@ -491,7 +492,7 @@ public partial class MainWindow : Window
         catch (Exception ex)
         {
             StatusText.Text = "Błąd";
-            MessageBox.Show(this, ex.Message, "CSVForge", MessageBoxButton.OK, MessageBoxImage.Error);
+            MessageBox.Show(this, PolishErrorMessage(ex), "CSVForge", MessageBoxButton.OK, MessageBoxImage.Error);
         }
         finally
         {
@@ -505,6 +506,34 @@ public partial class MainWindow : Window
     private void CancelOperation_Click(object sender, RoutedEventArgs e)
     {
         _operationCancellation?.Cancel();
+    }
+
+    private void OpenLogs_Click(object sender, RoutedEventArgs e)
+    {
+        Directory.CreateDirectory(AppPaths.LogsDirectory);
+        Process.Start(new ProcessStartInfo(AppPaths.LogsDirectory) { UseShellExecute = true });
+    }
+
+    private void ShowHelp_Click(object sender, RoutedEventArgs e)
+    {
+        MessageBox.Show(this,
+            "1. Utwórz lub otwórz workspace.\n2. Wybierz CSV i sprawdź podgląd.\n3. Zaimportuj dane.\n4. Wybierz tabelę, klucze oraz operację.\n5. Wyniki możesz filtrować, przeglądać stronami i eksportować.",
+            "CSVForge - pomoc", MessageBoxButton.OK, MessageBoxImage.Information);
+    }
+
+    private static string PolishErrorMessage(Exception exception)
+    {
+        return exception switch
+        {
+            FileNotFoundException => "Nie znaleziono wskazanego pliku.",
+            DirectoryNotFoundException => "Nie znaleziono wskazanego katalogu.",
+            UnauthorizedAccessException => "Brak uprawnień do pliku lub katalogu.",
+            SqliteException { SqliteErrorCode: 5 or 6 } => "Workspace jest używany przez inną operację. Spróbuj ponownie za chwilę.",
+            IOException => "Nie udało się odczytać lub zapisać pliku. Sprawdź dostępne miejsce i czy plik nie jest zablokowany.",
+            ArgumentException => $"Nieprawidłowe dane: {exception.Message}",
+            InvalidOperationException => exception.Message,
+            _ => $"Wystąpił nieoczekiwany błąd: {exception.Message}"
+        };
     }
 
     private void LoadRecentWorkspaces()

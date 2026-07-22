@@ -1,4 +1,5 @@
 using CSVForge.Infrastructure;
+using System.IO;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Serilog;
@@ -16,10 +17,11 @@ public partial class App : System.Windows.Application
 
     public App()
     {
+        Directory.CreateDirectory(AppPaths.LogsDirectory);
         Log.Logger = new LoggerConfiguration()
             .MinimumLevel.Information()
             .Enrich.FromLogContext()
-            .WriteTo.File("logs/csvforge-wpf-.log", rollingInterval: RollingInterval.Day)
+            .WriteTo.File(Path.Combine(AppPaths.LogsDirectory, "csvforge-wpf-.log"), rollingInterval: RollingInterval.Day)
             .CreateLogger();
 
         _host = Host.CreateDefaultBuilder()

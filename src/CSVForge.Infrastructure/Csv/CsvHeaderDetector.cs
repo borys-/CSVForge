@@ -31,6 +31,39 @@ internal static class CsvHeaderDetector
         return first.Zip(second).Any(pair => !LooksLikeValue(pair.First) && LooksLikeValue(pair.Second));
     }
 
+    public static bool LooksLikeReportPreamble(IReadOnlyList<string> first, IReadOnlyList<string> second)
+    {
+        return first.Count == 1
+            && second.Count > 1
+            && first[0].Contains(':', StringComparison.Ordinal)
+            && !string.IsNullOrWhiteSpace(first[0]);
+    }
+
+    public static int GetSharedTrailingEmptyColumnCount(IReadOnlyList<string> first, IReadOnlyList<string> second)
+    {
+        int maximum = Math.Min(first.Count, second.Count) - 1;
+        int count = 0;
+        while (count < maximum
+               && string.IsNullOrWhiteSpace(first[first.Count - count - 1])
+               && string.IsNullOrWhiteSpace(second[second.Count - count - 1]))
+        {
+            count++;
+        }
+
+        return count;
+    }
+
+    public static string[] TrimTrailingEmptyColumns(string[] record, int count)
+    {
+        if (count <= 0 || record.Length <= count
+            || record.Skip(record.Length - count).Any(value => !string.IsNullOrWhiteSpace(value)))
+        {
+            return record;
+        }
+
+        return record[..^count];
+    }
+
     private static bool LooksLikeValue(string value)
     {
         return decimal.TryParse(value, NumberStyles.Any, CultureInfo.InvariantCulture, out _)

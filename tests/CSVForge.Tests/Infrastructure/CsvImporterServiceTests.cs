@@ -190,6 +190,20 @@ public sealed class CsvImporterServiceTests
         Assert.Equal(2, result.Import.Columns.Select(column => column.Name).Distinct(StringComparer.OrdinalIgnoreCase).Count());
     }
 
+    [Fact]
+    public async Task ImportCsvUseCase_ImportsReportWithPreambleAndTrailingDelimiter()
+    {
+        (ServiceProvider provider, string csvPath) = await CreateWorkspaceAndCsvAsync(
+            "Obiekty: od 1 do 3 ze wszystkich 3\r\nPPE;\r\n590380100003453588;\r\n590380100012575219;\r\n");
+
+        ImportResult result = await provider.GetRequiredService<IImportCsvUseCase>()
+            .ExecuteAsync(new ImportRequest(csvPath, "Energy", true, null, null, 500, true));
+
+        Assert.Equal(2, result.Import.RowCount);
+        Assert.Equal(["PPE"], result.Import.Columns.Select(column => column.Name));
+        Assert.Empty(result.Errors);
+    }
+
     private static async Task<(ServiceProvider Provider, string CsvPath)> CreateWorkspaceAndCsvAsync(string content)
     {
         string directory = Path.Combine(Path.GetTempPath(), "CSVForge.Tests", Guid.NewGuid().ToString("N"));

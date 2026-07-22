@@ -37,11 +37,27 @@ internal sealed class CsvReaderService : ICsvReader
 
             string[] firstRecord = csv.Parser.Record ?? [];
             string[]? secondRecord = null;
+            int trailingEmptyColumns = 0;
             bool hasHeader = request.HasHeader;
             if (request.AutoDetectHeader && await csv.ReadAsync())
             {
                 secondRecord = csv.Parser.Record ?? [];
-                hasHeader = CsvHeaderDetector.LooksLikeHeader(firstRecord, secondRecord);
+                if (CsvHeaderDetector.LooksLikeReportPreamble(firstRecord, secondRecord))
+                {
+                    firstRecord = secondRecord;
+                    secondRecord = await csv.ReadAsync() ? csv.Parser.Record ?? [] : null;
+                }
+
+                if (secondRecord is not null)
+                {
+                    trailingEmptyColumns = CsvHeaderDetector.GetSharedTrailingEmptyColumnCount(firstRecord, secondRecord);
+                    firstRecord = CsvHeaderDetector.TrimTrailingEmptyColumns(firstRecord, trailingEmptyColumns);
+                    secondRecord = CsvHeaderDetector.TrimTrailingEmptyColumns(secondRecord, trailingEmptyColumns);
+                }
+
+                hasHeader = secondRecord is null
+                    ? request.HasHeader
+                    : CsvHeaderDetector.LooksLikeHeader(firstRecord, secondRecord);
             }
 
             if (hasHeader)
@@ -61,7 +77,8 @@ internal sealed class CsvReaderService : ICsvReader
             while (rows.Count < rowLimit && await csv.ReadAsync())
             {
                 cancellationToken.ThrowIfCancellationRequested();
-                rows.Add(csv.Parser.Record ?? []);
+                string[] record = csv.Parser.Record ?? [];
+                rows.Add(CsvHeaderDetector.TrimTrailingEmptyColumns(record, trailingEmptyColumns));
             }
         }
         catch (Exception ex) when (ex is CsvHelperException or DecoderFallbackException)

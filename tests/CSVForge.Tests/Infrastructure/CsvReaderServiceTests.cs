@@ -118,6 +118,22 @@ public sealed class CsvReaderServiceTests
     }
 
     [Fact]
+    public async Task PreviewCsvUseCase_SkipsReportPreambleAndTrailingDelimiter()
+    {
+        string csvPath = await WriteTempFileAsync(
+            "Obiekty: od 1 do 3 ze wszystkich 3\r\nPPE;\r\n590380100003453588;\r\n590380100012575219;\r\n",
+            Encoding.UTF8);
+
+        CsvPreview preview = await CreatePreviewUseCase().ExecuteAsync(
+            new ImportRequest(csvPath, "Energy", true, null, null, 500, true));
+
+        Assert.Equal(["PPE"], preview.Columns.Select(column => column.Name));
+        Assert.Equal(2, preview.Rows.Count);
+        Assert.Equal("590380100003453588", preview.Rows[0][0]);
+        Assert.All(preview.Rows, row => Assert.Single(row));
+    }
+
+    [Fact]
     public async Task PreviewCsvUseCase_NormalizesDuplicateHeaders()
     {
         string csvPath = await WriteTempFileAsync("Order Id;Order Id;123\r\n1;2;3\r\n", Encoding.UTF8);

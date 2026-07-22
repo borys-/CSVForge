@@ -66,11 +66,27 @@ internal sealed class CsvImporterService(IWorkspaceContext workspaceContext) : I
 
         string[] firstRecord = csv.Parser.Record ?? [];
         string[]? secondRecord = null;
+        int trailingEmptyColumns = 0;
         bool hasHeader = request.HasHeader;
         if (request.AutoDetectHeader && await csv.ReadAsync())
         {
             secondRecord = csv.Parser.Record ?? [];
-            hasHeader = CsvHeaderDetector.LooksLikeHeader(firstRecord, secondRecord);
+            if (CsvHeaderDetector.LooksLikeReportPreamble(firstRecord, secondRecord))
+            {
+                firstRecord = secondRecord;
+                secondRecord = await csv.ReadAsync() ? csv.Parser.Record ?? [] : null;
+            }
+
+            if (secondRecord is not null)
+            {
+                trailingEmptyColumns = CsvHeaderDetector.GetSharedTrailingEmptyColumnCount(firstRecord, secondRecord);
+                firstRecord = CsvHeaderDetector.TrimTrailingEmptyColumns(firstRecord, trailingEmptyColumns);
+                secondRecord = CsvHeaderDetector.TrimTrailingEmptyColumns(secondRecord, trailingEmptyColumns);
+            }
+
+            hasHeader = secondRecord is null
+                ? request.HasHeader
+                : CsvHeaderDetector.LooksLikeHeader(firstRecord, secondRecord);
         }
 
         IReadOnlyList<string> originalHeaders = hasHeader
@@ -106,7 +122,7 @@ internal sealed class CsvImporterService(IWorkspaceContext workspaceContext) : I
         while (await csv.ReadAsync())
         {
             cancellationToken.ThrowIfCancellationRequested();
-            string[] record = csv.Parser.Record ?? [];
+            string[] record = CsvHeaderDetector.TrimTrailingEmptyColumns(csv.Parser.Record ?? [], trailingEmptyColumns);
             if (record.Length != columnNames.Count)
             {
                 errors.Add(new ImportError(csv.Parser.Row, $"Expected {columnNames.Count} fields, found {record.Length}.", csv.Parser.RawRecord));

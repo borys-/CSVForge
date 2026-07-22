@@ -203,9 +203,9 @@ public partial class MainWindow : Window
         _pageOffset = 0;
         _sortColumn = null;
         _sortDescending = false;
-        UpdateComparisonFiles();
         DuplicateColumnComboBox.ItemsSource = _selectedImport?.Columns.Select(column => column.Name).ToArray();
         DuplicateColumnComboBox.SelectedIndex = DuplicateColumnComboBox.Items.Count > 0 ? 0 : -1;
+        UpdateComparisonFiles();
         LeftOutputColumnsTextBox.Text = _selectedImport is null ? string.Empty : string.Join(",", _selectedImport.Columns.Select(column => column.Name));
         await RefreshSelectedTableAsync();
     }
@@ -654,6 +654,16 @@ public partial class MainWindow : Window
 
     private void CompareTableComboBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
     {
+        UpdateRightComparisonKeys();
+    }
+
+    private void DuplicateColumnComboBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        UpdateRightComparisonKeys();
+    }
+
+    private void UpdateRightComparisonKeys()
+    {
         if (CompareTableComboBox.SelectedItem is not CsvImport import)
         {
             RightKeyColumnsTextBox.ItemsSource = null;
@@ -664,9 +674,11 @@ public partial class MainWindow : Window
         string[] columns = import.Columns.Select(column => column.Name).ToArray();
         RightKeyColumnsTextBox.ItemsSource = columns;
         IReadOnlyList<string> leftKeys = SelectedKeyColumns();
-        RightKeyColumnsTextBox.Text = leftKeys.All(key => columns.Contains(key, StringComparer.OrdinalIgnoreCase))
+        string suggestedKeys = leftKeys.Count > 0 && leftKeys.All(key => columns.Contains(key, StringComparer.OrdinalIgnoreCase))
             ? string.Join(",", leftKeys)
             : columns.FirstOrDefault() ?? string.Empty;
+        RightKeyColumnsTextBox.SelectedItem = columns.FirstOrDefault(column => string.Equals(column, suggestedKeys, StringComparison.OrdinalIgnoreCase));
+        RightKeyColumnsTextBox.Text = suggestedKeys;
     }
 
     private void JoinTableComboBox_SelectionChanged(object sender, SelectionChangedEventArgs e)

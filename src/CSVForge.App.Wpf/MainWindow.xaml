@@ -128,7 +128,9 @@
                                     <ColumnDefinition Width="*" />
                                 </Grid.ColumnDefinitions>
                                 <TextBlock Text="Klucze lewego pliku" VerticalAlignment="Center" />
-                                <ComboBox x:Name="DuplicateColumnComboBox" Grid.Column="1" Height="30" Margin="10,0,0,0" IsEditable="True" ToolTip="Wybierz jedną kolumnę lub wpisz kilka nazw oddzielonych przecinkami" />
+                                <ComboBox x:Name="DuplicateColumnComboBox" Grid.Column="1" Height="30" Margin="10,0,0,0" IsEditable="True"
+                                          SelectionChanged="DuplicateColumnComboBox_SelectionChanged"
+                                          ToolTip="Wybierz jedną kolumnę lub wpisz kilka nazw oddzielonych przecinkami" />
                             </Grid>
 
                             <TabControl MinHeight="156" Padding="4">

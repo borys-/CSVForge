@@ -385,13 +385,9 @@ public partial class MainWindow : Window
             return;
         }
 
-        char delimiter = ExportDelimiterComboBox.SelectedItem is ComboBoxItem item && item.Tag is string tag && tag.Length > 0
-            ? tag[0]
-            : ';';
-
         await RunUiActionAsync(async cancellationToken =>
         {
-            ExportResult result = await _exportTable.ExecuteAsync(new ExportTableRequest(tableName, dialog.FileName, delimiter, true, FilterTextBox.Text.Trim()), cancellationToken);
+            ExportResult result = await _exportTable.ExecuteAsync(new ExportTableRequest(tableName, dialog.FileName, ';', true, FilterTextBox.Text.Trim()), cancellationToken);
             MessageBox.Show(this, $"Wyeksportowano {result.ExportedRows} wierszy do:\n{result.FilePath}", "CSVForge", MessageBoxButton.OK, MessageBoxImage.Information);
         }, "Eksport zakończony");
     }
@@ -493,16 +489,21 @@ public partial class MainWindow : Window
         }, "Nazwa zmieniona");
     }
 
-    private void ImportsListBox_PreviewMouseRightButtonDown(object sender, MouseButtonEventArgs e)
+    private void ListBox_PreviewMouseRightButtonDown(object sender, MouseButtonEventArgs e)
     {
+        if (sender is not ListBox listBox)
+        {
+            return;
+        }
+
         if (e.OriginalSource is DependencyObject source
-            && ItemsControl.ContainerFromElement(ImportsListBox, source) is ListBoxItem item)
+            && ItemsControl.ContainerFromElement(listBox, source) is ListBoxItem item)
         {
             item.IsSelected = true;
             return;
         }
 
-        ImportsListBox.SelectedItem = null;
+        listBox.SelectedItem = null;
     }
 
     private void SelectImport(Guid importId)

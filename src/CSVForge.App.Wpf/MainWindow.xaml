@@ -48,37 +48,32 @@
                                     ToolTip="Dodaj plik CSV" Click="ChooseCsv_Click" />
                         </Grid>
 
-                        <GroupBox DockPanel.Dock="Bottom" Header="Historia operacji" Margin="0,10,0,0" Height="160">
-                            <DockPanel>
-                                <Button DockPanel.Dock="Bottom" Content="Usuń wynik" Height="28" Margin="0,6,0,0" Click="DeleteOperation_Click" />
-                                <ListBox x:Name="OperationsListBox" SelectionChanged="OperationsListBox_SelectionChanged">
+                        <Expander DockPanel.Dock="Bottom" Header="Historia operacji" Margin="0,10,0,0" IsExpanded="False">
+                            <Border BorderBrush="#D8DEE8" BorderThickness="1" Margin="0,6,0,0" Height="150">
+                                <ListBox x:Name="OperationsListBox" SelectionChanged="OperationsListBox_SelectionChanged"
+                                         PreviewMouseRightButtonDown="ListBox_PreviewMouseRightButtonDown">
+                                    <ListBox.ContextMenu>
+                                        <ContextMenu>
+                                            <MenuItem Header="Eksportuj" Click="ExportTable_Click" />
+                                            <Separator />
+                                            <MenuItem Header="Usuń wynik" Click="DeleteOperation_Click" />
+                                        </ContextMenu>
+                                    </ListBox.ContextMenu>
                                     <ListBox.ItemTemplate>
                                         <DataTemplate>
                                             <TextBlock Text="{Binding DisplayName}" TextTrimming="CharacterEllipsis" ToolTip="{Binding DisplayName}" />
                                         </DataTemplate>
                                     </ListBox.ItemTemplate>
                                 </ListBox>
-                            </DockPanel>
-                        </GroupBox>
-
-                        <Grid DockPanel.Dock="Bottom" Margin="0,10,0,0">
-                            <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="*" />
-                                <ColumnDefinition Width="Auto" />
-                            </Grid.ColumnDefinitions>
-                            <ComboBox x:Name="ExportDelimiterComboBox" Height="30" SelectedIndex="0">
-                                <ComboBoxItem Content="Średnik (;)" Tag=";" />
-                                <ComboBoxItem Content="Przecinek (,)" Tag="," />
-                                <ComboBoxItem Content="Tabulator" Tag="&#9;" />
-                            </ComboBox>
-                            <Button Grid.Column="1" Content="Eksportuj" Height="30" Margin="8,0,0,0" Padding="12,0" Click="ExportTable_Click" />
-                        </Grid>
+                            </Border>
+                        </Expander>
 
                         <ListBox x:Name="ImportsListBox" SelectionChanged="ImportsListBox_SelectionChanged"
-                                 HorizontalContentAlignment="Stretch" PreviewMouseRightButtonDown="ImportsListBox_PreviewMouseRightButtonDown">
+                                 HorizontalContentAlignment="Stretch" PreviewMouseRightButtonDown="ListBox_PreviewMouseRightButtonDown">
                             <ListBox.ContextMenu>
                                 <ContextMenu>
                                     <MenuItem Header="Zmień nazwę" Click="RenameImport_Click" />
+                                    <MenuItem Header="Eksportuj" Click="ExportTable_Click" />
                                     <Separator />
                                     <MenuItem Header="Usuń" Click="DeleteImport_Click" />
                                 </ContextMenu>

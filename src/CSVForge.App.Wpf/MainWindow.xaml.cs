@@ -13,6 +13,8 @@ namespace CSVForge.App.Wpf;
 
 public partial class MainWindow : Window
 {
+    private const int PageSize = 200;
+
     private readonly ICreateWorkspaceUseCase _createWorkspace;
     private readonly IOpenWorkspaceUseCase _openWorkspace;
     private readonly IImportCsvUseCase _importCsv;
@@ -25,6 +27,8 @@ public partial class MainWindow : Window
 
     private CsvImport? _selectedImport;
     private string? _adHocTableName;
+    private int _pageOffset;
+    private long _totalRows;
 
     public MainWindow(
         ICreateWorkspaceUseCase createWorkspace,
@@ -111,6 +115,7 @@ public partial class MainWindow : Window
     {
         _selectedImport = ImportsListBox.SelectedItem as CsvImport;
         _adHocTableName = null;
+        _pageOffset = 0;
         DuplicateColumnComboBox.ItemsSource = _selectedImport?.Columns.Select(column => column.Name).ToArray();
         DuplicateColumnComboBox.SelectedIndex = DuplicateColumnComboBox.Items.Count > 0 ? 0 : -1;
         await RefreshSelectedTableAsync();
@@ -118,6 +123,24 @@ public partial class MainWindow : Window
 
     private async void RefreshTable_Click(object sender, RoutedEventArgs e)
     {
+        _pageOffset = 0;
+        await RefreshSelectedTableAsync();
+    }
+
+    private async void PreviousPage_Click(object sender, RoutedEventArgs e)
+    {
+        _pageOffset = Math.Max(0, _pageOffset - PageSize);
+        await RefreshSelectedTableAsync();
+    }
+
+    private async void NextPage_Click(object sender, RoutedEventArgs e)
+    {
+        if (_pageOffset + PageSize >= _totalRows)
+        {
+            return;
+        }
+
+        _pageOffset += PageSize;
         await RefreshSelectedTableAsync();
     }
 
@@ -137,6 +160,7 @@ public partial class MainWindow : Window
                 true));
 
             _adHocTableName = result.ResultTableName;
+            _pageOffset = 0;
             await RefreshSelectedTableAsync();
         }, "Duplikaty gotowe");
     }
@@ -160,6 +184,7 @@ public partial class MainWindow : Window
                 DatasetCompareMode.AllWithStatus));
 
             _adHocTableName = result.ResultTableName;
+            _pageOffset = 0;
             await RefreshSelectedTableAsync();
         }, "Porównanie gotowe");
     }
@@ -191,6 +216,7 @@ public partial class MainWindow : Window
                 DatasetJoinType.Left));
 
             _adHocTableName = result.ResultTableName;
+            _pageOffset = 0;
             await RefreshSelectedTableAsync();
         }, "Połączenie gotowe");
     }
@@ -260,8 +286,8 @@ public partial class MainWindow : Window
         {
             TablePage page = await _browseTable.ExecuteAsync(new BrowseTableRequest(
                 tableName,
-                200,
-                0,
+                PageSize,
+                _pageOffset,
                 null,
                 false,
                 FilterTextBox.Text.Trim()));
@@ -269,6 +295,12 @@ public partial class MainWindow : Window
             string title = _adHocTableName is null ? _selectedImport!.DisplayName : "Wynik operacji";
             TableTitleText.Text = $"{title} ({page.TotalRows} wierszy)";
             DataGrid.ItemsSource = ToRows(page);
+            _totalRows = page.TotalRows;
+            PreviousPageButton.IsEnabled = _pageOffset > 0;
+            NextPageButton.IsEnabled = _pageOffset + page.Rows.Count < page.TotalRows;
+            long firstRow = page.Rows.Count == 0 ? 0 : _pageOffset + 1;
+            long lastRow = _pageOffset + page.Rows.Count;
+            PageStatusText.Text = $"{firstRow}-{lastRow} z {page.TotalRows}";
         }, "Tabela odświeżona");
     }
 

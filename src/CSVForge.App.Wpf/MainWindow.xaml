@@ -14,14 +14,17 @@
                     <ColumnDefinition Width="Auto" />
                     <ColumnDefinition Width="Auto" />
                     <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="Auto" />
                 </Grid.ColumnDefinitions>
                 <TextBlock Text="CSVForge" Foreground="White" FontSize="20" FontWeight="SemiBold" VerticalAlignment="Center" />
-                <TextBlock x:Name="WorkspaceStatusText" Grid.Column="1" Foreground="#D6DEE8" Margin="18,0,0,0" VerticalAlignment="Center" Text="Brak otwartego workspace" TextTrimming="CharacterEllipsis" />
+                <TextBlock x:Name="WorkspaceStatusText" Grid.Column="1" Visibility="Collapsed" />
                 <ProgressBar x:Name="OperationProgressBar" Grid.Column="2" Width="110" Height="8" Margin="0,0,12,0" IsIndeterminate="True" Visibility="Collapsed" />
                 <Button x:Name="CancelOperationButton" Grid.Column="3" Content="Anuluj" Height="28" Margin="0,0,12,0" Padding="10,0" Visibility="Collapsed" Click="CancelOperation_Click" />
-                <Button Grid.Column="4" Content="Logi" Height="28" Margin="0,0,8,0" Padding="10,0" Click="OpenLogs_Click" />
-                <Button Grid.Column="5" Content="Pomoc" Height="28" Margin="0,0,12,0" Padding="10,0" Click="ShowHelp_Click" />
-                <TextBlock x:Name="StatusText" Grid.Column="6" Foreground="#D6DEE8" VerticalAlignment="Center" Text="Gotowy" />
+                <ComboBox x:Name="WorkspacePathTextBox" Grid.Column="4" Width="300" Height="28" Margin="0,0,8,0"
+                          VerticalContentAlignment="Center" SelectionChanged="WorkspacePathTextBox_SelectionChanged" ToolTip="Aktywny workspace" />
+                <Button Grid.Column="5" Content="Logi" Height="28" Margin="0,0,8,0" Padding="10,0" Click="OpenLogs_Click" />
+                <Button Grid.Column="6" Content="Pomoc" Height="28" Margin="0,0,12,0" Padding="10,0" Click="ShowHelp_Click" />
+                <TextBlock x:Name="StatusText" Grid.Column="7" Foreground="#D6DEE8" VerticalAlignment="Center" Text="Gotowy" />
             </Grid>
         </Border>
 
@@ -33,25 +36,14 @@
 
             <Border Background="White" BorderBrush="#D8DEE8" BorderThickness="1" CornerRadius="6" Padding="12">
                 <Grid>
-                    <Grid.RowDefinitions>
-                        <RowDefinition Height="Auto" />
-                        <RowDefinition Height="Auto" />
-                    </Grid.RowDefinitions>
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="120" />
                         <ColumnDefinition Width="*" />
                         <ColumnDefinition Width="Auto" />
-                        <ColumnDefinition Width="Auto" />
-                        <ColumnDefinition Width="Auto" />
-                        <ColumnDefinition Width="Auto" />
                     </Grid.ColumnDefinitions>
-                    <TextBlock Text="Workspace" VerticalAlignment="Center" FontWeight="SemiBold" />
-                    <ComboBox x:Name="WorkspacePathTextBox" Grid.Column="1" Height="32" Margin="8,0" IsEditable="True" VerticalContentAlignment="Center" />
-                    <Button Grid.Column="2" Content="Utwórz / otwórz" Height="32" MinWidth="120" Padding="12,0" Click="OpenWorkspace_Click" />
-
-                    <TextBlock Grid.Row="1" Text="CSV" VerticalAlignment="Center" FontWeight="SemiBold" Margin="0,10,0,0" />
-                    <TextBox x:Name="CsvPathTextBox" Grid.Row="1" Grid.Column="1" Height="32" Margin="8,10,8,0" VerticalContentAlignment="Center" />
-                    <Button Grid.Row="1" Grid.Column="2" Grid.ColumnSpan="4" Content="Wybierz i przygotuj import" Height="32" MinWidth="190" Margin="0,10,0,0" Padding="14,0" Click="ChooseCsv_Click" />
+                    <TextBlock Text="Plik CSV" VerticalAlignment="Center" FontWeight="SemiBold" />
+                    <TextBox x:Name="CsvPathTextBox" Grid.Column="1" Height="32" Margin="8,0" VerticalContentAlignment="Center" IsReadOnly="True" />
+                    <Button Grid.Column="2" Content="Wybierz i przygotuj import" Height="32" MinWidth="190" Padding="14,0" Click="ChooseCsv_Click" />
                 </Grid>
             </Border>
 

@@ -22,6 +22,7 @@ namespace CSVForge.App.Wpf;
 public partial class MainWindow : Window
 {
     private const int PageSize = 200;
+    private const string CreateNewWorkspaceItem = "+ Utwórz nowy workspace...";
     private static readonly string RecentWorkspacesPath = Path.Combine(AppPaths.DataDirectory, "recent-workspaces.json");
     private static readonly string DefaultWorkspacePath = Path.Combine(
         Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments), "CSVForge", "workspace.db");
@@ -49,6 +50,9 @@ public partial class MainWindow : Window
     private bool _sortDescending;
     private CancellationTokenSource? _operationCancellation;
     private string _startupWorkspacePath = DefaultWorkspacePath;
+    private string? _currentWorkspacePath;
+    private bool _workspaceSelectionReady;
+    private bool _ignoreWorkspaceSelection;
 
     public MainWindow(
         ICreateWorkspaceUseCase createWorkspace,
@@ -90,19 +94,57 @@ public partial class MainWindow : Window
     {
         Loaded -= MainWindow_Loaded;
         await RunUiActionAsync(() => OpenWorkspaceAsync(_startupWorkspacePath), "Workspace gotowy");
+        _workspaceSelectionReady = true;
     }
 
-    private async void OpenWorkspace_Click(object sender, RoutedEventArgs e)
+    private async void WorkspacePathTextBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
     {
-        await RunUiActionAsync(async () =>
+        if (!_workspaceSelectionReady || _ignoreWorkspaceSelection || WorkspacePathTextBox.SelectedItem is not string selected)
         {
-            string path = WorkspacePathTextBox.Text.Trim();
-            if (string.IsNullOrWhiteSpace(path))
-            {
-                path = DefaultWorkspacePath;
-            }
-            await OpenWorkspaceAsync(path);
-        }, "Workspace gotowy");
+            return;
+        }
+
+        if (selected == CreateNewWorkspaceItem)
+        {
+            RestoreWorkspaceSelection();
+            await CreateNewWorkspaceAsync();
+            return;
+        }
+
+        if (string.Equals(selected, _currentWorkspacePath, StringComparison.OrdinalIgnoreCase))
+        {
+            return;
+        }
+
+        string? previousPath = _currentWorkspacePath;
+        await RunUiActionAsync(() => OpenWorkspaceAsync(selected), "Workspace gotowy");
+        if (!string.Equals(_currentWorkspacePath, selected, StringComparison.OrdinalIgnoreCase))
+        {
+            SelectWorkspace(previousPath ?? _startupWorkspacePath);
+        }
+    }
+
+    private async Task CreateNewWorkspaceAsync()
+    {
+        string defaultDirectory = Path.GetDirectoryName(DefaultWorkspacePath)!;
+        Directory.CreateDirectory(defaultDirectory);
+        SaveFileDialog dialog = new()
+        {
+            Filter = "CSVForge workspace (*.db)|*.db|All files (*.*)|*.*",
+            DefaultExt = ".db",
+            AddExtension = true,
+            InitialDirectory = defaultDirectory,
+            FileName = "workspace.db",
+            Title = "Utwórz nowy workspace"
+        };
+
+        if (dialog.ShowDialog(this) != true)
+        {
+            RestoreWorkspaceSelection();
+            return;
+        }
+
+        await RunUiActionAsync(() => OpenWorkspaceAsync(dialog.FileName), "Nowy workspace gotowy");
     }
 
     private async Task OpenWorkspaceAsync(string path)
@@ -120,6 +162,7 @@ public partial class MainWindow : Window
         }
 
         WorkspaceStatusText.Text = fullPath;
+        _currentWorkspacePath = fullPath;
         SaveRecentWorkspace(fullPath);
         await RefreshImportsAsync();
         await RefreshOperationsAsync();
@@ -735,8 +778,7 @@ public partial class MainWindow : Window
         {
             if (!File.Exists(RecentWorkspacesPath))
             {
-                WorkspacePathTextBox.ItemsSource = new[] { DefaultWorkspacePath };
-                WorkspacePathTextBox.Text = DefaultWorkspacePath;
+                SetWorkspaceItems([DefaultWorkspacePath], DefaultWorkspacePath);
                 return DefaultWorkspacePath;
             }
 
@@ -747,14 +789,12 @@ public partial class MainWindow : Window
                 .Take(10)
                 .ToArray();
             string startupPath = paths.FirstOrDefault() ?? DefaultWorkspacePath;
-            WorkspacePathTextBox.ItemsSource = paths.Length == 0 ? new[] { DefaultWorkspacePath } : paths;
-            WorkspacePathTextBox.Text = startupPath;
+            SetWorkspaceItems(paths.Length == 0 ? [DefaultWorkspacePath] : paths, startupPath);
             return startupPath;
         }
         catch (Exception ex) when (ex is JsonException or IOException or UnauthorizedAccessException or ArgumentException)
         {
-            WorkspacePathTextBox.ItemsSource = new[] { DefaultWorkspacePath };
-            WorkspacePathTextBox.Text = DefaultWorkspacePath;
+            SetWorkspaceItems([DefaultWorkspacePath], DefaultWorkspacePath);
             return DefaultWorkspacePath;
         }
     }
@@ -763,13 +803,33 @@ public partial class MainWindow : Window
     {
         string fullPath = Path.GetFullPath(path);
         string[] existing = (WorkspacePathTextBox.ItemsSource as IEnumerable<string> ?? [])
+            .Where(item => item != CreateNewWorkspaceItem)
             .Where(item => !string.Equals(item, fullPath, StringComparison.OrdinalIgnoreCase))
             .Prepend(fullPath)
             .Take(10)
             .ToArray();
         Directory.CreateDirectory(Path.GetDirectoryName(RecentWorkspacesPath)!);
         File.WriteAllText(RecentWorkspacesPath, JsonSerializer.Serialize(existing));
-        WorkspacePathTextBox.ItemsSource = existing;
-        WorkspacePathTextBox.Text = fullPath;
+        SetWorkspaceItems(existing, fullPath);
+    }
+
+    private void SetWorkspaceItems(IEnumerable<string> paths, string selectedPath)
+    {
+        _ignoreWorkspaceSelection = true;
+        WorkspacePathTextBox.ItemsSource = paths.Append(CreateNewWorkspaceItem).ToArray();
+        WorkspacePathTextBox.SelectedItem = selectedPath;
+        _ignoreWorkspaceSelection = false;
+    }
+
+    private void SelectWorkspace(string path)
+    {
+        _ignoreWorkspaceSelection = true;
+        WorkspacePathTextBox.SelectedItem = path;
+        _ignoreWorkspaceSelection = false;
+    }
+
+    private void RestoreWorkspaceSelection()
+    {
+        SelectWorkspace(_currentWorkspacePath ?? _startupWorkspacePath);
     }
 }

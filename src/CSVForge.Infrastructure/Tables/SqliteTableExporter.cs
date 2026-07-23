@@ -21,7 +21,10 @@ internal sealed class SqliteTableExporter(IWorkspaceContext workspaceContext) : 
         {
             throw new ArgumentException("Output path is required.", nameof(request));
         }
-        SqliteIdentifierGuard.Table(request.TableName);
+        if (string.IsNullOrWhiteSpace(request.SourceSql))
+        {
+            SqliteIdentifierGuard.Table(request.TableName);
+        }
 
         string? directory = Path.GetDirectoryName(Path.GetFullPath(request.OutputPath));
         if (directory is null || !Directory.Exists(directory))
@@ -48,7 +51,11 @@ internal sealed class SqliteTableExporter(IWorkspaceContext workspaceContext) : 
     {
         await using SqliteConnection connection = SqliteConnectionFactory.Create(workspacePath);
         await connection.OpenAsync(cancellationToken);
-        IReadOnlyList<string> tableColumns = await ReadColumnsAsync(connection, request.TableName, cancellationToken);
+        IReadOnlyList<string> tableColumns = string.IsNullOrWhiteSpace(request.SourceSql)
+            ? await ReadColumnsAsync(connection, request.TableName, cancellationToken)
+            : request.Columns is { Count: > 0 }
+                ? request.Columns
+                : throw new ArgumentException("Columns are required when exporting an SQL result.", nameof(request));
         IReadOnlyList<string> columns = request.Columns is { Count: > 0 }
             ? request.Columns
             : tableColumns;
@@ -63,7 +70,10 @@ internal sealed class SqliteTableExporter(IWorkspaceContext workspaceContext) : 
             ? string.Empty
             : " WHERE " + string.Join(" OR ", tableColumns.Select(column => $"{CsvImportNameHelper.QuoteIdentifier(column)} LIKE $filter"));
         string projection = string.Join(", ", columns.Select(CsvImportNameHelper.QuoteIdentifier));
-        command.CommandText = $"SELECT {projection} FROM {CsvImportNameHelper.QuoteIdentifier(request.TableName)}{whereClause};";
+        string source = string.IsNullOrWhiteSpace(request.SourceSql)
+            ? CsvImportNameHelper.QuoteIdentifier(request.TableName)
+            : $"({NormalizeSql(request.SourceSql)}) AS _sql_result";
+        command.CommandText = $"SELECT {projection} FROM {source}{whereClause};";
         if (!string.IsNullOrWhiteSpace(request.TextFilter))
         {
             command.Parameters.AddWithValue("$filter", $"%{request.TextFilter}%");
@@ -117,5 +127,19 @@ internal sealed class SqliteTableExporter(IWorkspaceContext workspaceContext) : 
         }
 
         return $"\"{value.Replace("\"", "\"\"")}\"";
+    }
+
+    private static string NormalizeSql(string sql)
+    {
+        string normalized = sql.Trim();
+        while (normalized.EndsWith(';'))
+        {
+            normalized = normalized[..^1].TrimEnd();
+        }
+        if (normalized.Length == 0)
+        {
+            throw new ArgumentException("SQL query is required.", nameof(sql));
+        }
+        return normalized;
     }
 }

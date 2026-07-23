@@ -71,6 +71,7 @@ public partial class MainWindow : Window
     private int _activeImportCount;
     private SqlSchemaSnapshot _sqlSchema = SqlSchemaSnapshot.Empty;
     private CompletionWindow? _sqlCompletionWindow;
+    private string? _sqlResultQuery;
 
     public MainWindow(
         ICreateWorkspaceUseCase createWorkspace,
@@ -460,8 +461,9 @@ public partial class MainWindow : Window
 
     private async void ExportTable_Click(object sender, RoutedEventArgs e)
     {
-        string? tableName = _adHocTableName ?? _selectedImport?.TableName;
-        if (tableName is null)
+        string? sourceSql = _sqlResultQuery;
+        string? tableName = sourceSql is null ? _adHocTableName ?? _selectedImport?.TableName : null;
+        if (tableName is null && sourceSql is null)
         {
             MessageBox.Show(this, "Wybierz plik lub wynik do eksportu.", "CSVForge", MessageBoxButton.OK, MessageBoxImage.Information);
             return;
@@ -490,10 +492,11 @@ public partial class MainWindow : Window
             {
                 CreateTableFromResultResult result = await _createTableFromResult.ExecuteAsync(
                     new CreateTableFromResultRequest(
-                        tableName,
+                        tableName ?? string.Empty,
                         options.TargetTableName,
                         options.SelectedColumns,
-                        FilterTextBox.Text.Trim()),
+                        FilterTextBox.Text.Trim(),
+                        sourceSql),
                     cancellationToken);
                 _adHocTableName = result.TableName;
                 _pageOffset = 0;
@@ -511,7 +514,7 @@ public partial class MainWindow : Window
             Filter = "CSV files (*.csv)|*.csv|All files (*.*)|*.*",
             DefaultExt = ".csv",
             AddExtension = true,
-            FileName = $"{tableName}.csv",
+            FileName = sourceSql is null ? $"{tableName}.csv" : "wynik_sql.csv",
             Title = "Eksportuj dane do CSV"
         };
 
@@ -524,12 +527,13 @@ public partial class MainWindow : Window
         {
             ExportResult result = await _exportTable.ExecuteAsync(
                 new ExportTableRequest(
-                    tableName,
+                    tableName ?? string.Empty,
                     dialog.FileName,
                     ';',
                     true,
                     FilterTextBox.Text.Trim(),
-                    options.SelectedColumns),
+                    options.SelectedColumns,
+                    sourceSql),
                 cancellationToken);
             MessageBox.Show(this, $"Wyeksportowano {result.ExportedRows} wierszy do:\n{result.FilePath}", "CSVForge", MessageBoxButton.OK, MessageBoxImage.Information);
         }, "Eksport zakończony");
@@ -717,6 +721,7 @@ public partial class MainWindow : Window
 
     private async Task RefreshSelectedTableAsync()
     {
+        _sqlResultQuery = null;
         string? tableName = _adHocTableName ?? _selectedImport?.TableName;
         if (tableName is null)
         {
@@ -929,12 +934,16 @@ public partial class MainWindow : Window
 
             if (result.Columns.Count > 0)
             {
+                _sqlResultQuery = SqlQueryTextBox.Text;
+                ExportResultButton.Visibility = Visibility.Visible;
                 string suffix = result.WasTruncated ? " — pokazano pierwsze 10 000" : string.Empty;
                 SqlStatusText.Text = $"Zwrócono {result.Rows.Count:N0} wierszy{suffix}";
                 TableTitleText.Text = $"Wynik SQL ({result.Rows.Count:N0} wierszy)";
             }
             else
             {
+                _sqlResultQuery = null;
+                ExportResultButton.Visibility = Visibility.Collapsed;
                 SqlStatusText.Text = result.AffectedRows >= 0
                     ? $"Polecenie wykonane. Zmienione wiersze: {result.AffectedRows:N0}"
                     : "Polecenie wykonane";

@@ -21,13 +21,18 @@ internal sealed class SqliteTableMaterializer(IWorkspaceContext workspaceContext
             throw new ArgumentException("Wybierz co najmniej jedną kolumnę.", nameof(request));
         }
 
-        SqliteIdentifierGuard.Table(request.SourceTableName);
+        if (string.IsNullOrWhiteSpace(request.SourceSql))
+        {
+            SqliteIdentifierGuard.Table(request.SourceTableName);
+        }
         SqliteIdentifierGuard.Table(request.TargetTableName);
         SqliteIdentifierGuard.Columns(request.Columns);
 
         await using SqliteConnection connection = SqliteConnectionFactory.Create(workspaceContext.CurrentWorkspacePath);
         await connection.OpenAsync(cancellationToken);
-        IReadOnlyList<string> available = await ReadColumnsAsync(connection, request.SourceTableName, cancellationToken);
+        IReadOnlyList<string> available = string.IsNullOrWhiteSpace(request.SourceSql)
+            ? await ReadColumnsAsync(connection, request.SourceTableName, cancellationToken)
+            : request.Columns;
         HashSet<string> availableSet = available.ToHashSet(StringComparer.OrdinalIgnoreCase);
         if (request.Columns.Any(column => !availableSet.Contains(column)))
         {
@@ -35,7 +40,9 @@ internal sealed class SqliteTableMaterializer(IWorkspaceContext workspaceContext
         }
 
         await using SqliteTransaction transaction = (SqliteTransaction)await connection.BeginTransactionAsync(cancellationToken);
-        string source = CsvImportNameHelper.QuoteIdentifier(request.SourceTableName);
+        string source = string.IsNullOrWhiteSpace(request.SourceSql)
+            ? CsvImportNameHelper.QuoteIdentifier(request.SourceTableName)
+            : $"({NormalizeSql(request.SourceSql)}) AS _sql_result";
         string target = CsvImportNameHelper.QuoteIdentifier(request.TargetTableName);
         string projection = string.Join(", ", request.Columns.Select(CsvImportNameHelper.QuoteIdentifier));
         string where = string.IsNullOrWhiteSpace(request.TextFilter)
@@ -78,6 +85,20 @@ internal sealed class SqliteTableMaterializer(IWorkspaceContext workspaceContext
 
         await transaction.CommitAsync(cancellationToken);
         return new CreateTableFromResultResult(request.TargetTableName, rowCount);
+    }
+
+    private static string NormalizeSql(string sql)
+    {
+        string normalized = sql.Trim();
+        while (normalized.EndsWith(';'))
+        {
+            normalized = normalized[..^1].TrimEnd();
+        }
+        if (normalized.Length == 0)
+        {
+            throw new ArgumentException("Zapytanie SQL jest wymagane.", nameof(sql));
+        }
+        return normalized;
     }
 
     private static async Task<IReadOnlyList<string>> ReadColumnsAsync(

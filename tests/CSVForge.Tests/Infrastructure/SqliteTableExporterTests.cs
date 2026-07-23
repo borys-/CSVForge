@@ -111,4 +111,33 @@ public sealed class SqliteTableExporterTests
         Assert.Contains("Ada;Warszawa", content);
         Assert.DoesNotContain("Id;", content);
     }
+
+    [Fact]
+    public async Task ExportTableUseCase_ExportsFullSqlQueryResult()
+    {
+        string directory = Path.Combine(Path.GetTempPath(), "CSVForge.Tests", Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(directory);
+        string workspacePath = Path.Combine(directory, "workspace.db");
+        string inputPath = Path.Combine(directory, "input.csv");
+        string outputPath = Path.Combine(directory, "output.csv");
+        await File.WriteAllTextAsync(inputPath, "Id;Name\r\n1;Ada\r\n2;Ola\r\n");
+        ServiceProvider provider = new ServiceCollection().AddApplication().AddInfrastructure().BuildServiceProvider();
+        await provider.GetRequiredService<ICreateWorkspaceUseCase>().ExecuteAsync(workspacePath);
+        ImportResult import = await provider.GetRequiredService<IImportCsvUseCase>()
+            .ExecuteAsync(new ImportRequest(inputPath, "Input", true, null, null));
+
+        ExportResult result = await provider.GetRequiredService<IExportTableUseCase>()
+            .ExecuteAsync(new ExportTableRequest(
+                string.Empty,
+                outputPath,
+                ';',
+                true,
+                Columns: ["Name"],
+                SourceSql: $"SELECT Name FROM \"{import.Import.TableName}\" WHERE Id = '2';"));
+
+        Assert.Equal(1, result.ExportedRows);
+        string content = await File.ReadAllTextAsync(outputPath);
+        Assert.Contains("Ola", content);
+        Assert.DoesNotContain("Ada", content);
+    }
 }

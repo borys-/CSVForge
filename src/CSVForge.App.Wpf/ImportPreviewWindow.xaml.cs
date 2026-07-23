@@ -144,6 +144,21 @@ public partial class ImportPreviewWindow : Window
         return new ImportRequest(_filePath, DisplayNameTextBox.Text.Trim(), mode != "No", null, null, 5000, mode == "Auto", mappings);
     }
 
+    private void SelectAllColumns_Click(object sender, RoutedEventArgs e) => SetAllColumnsIncluded(true);
+
+    private void DeselectAllColumns_Click(object sender, RoutedEventArgs e) => SetAllColumnsIncluded(false);
+
+    private void SetAllColumnsIncluded(bool included)
+    {
+        ColumnSettingsDataGrid.CommitEdit(DataGridEditingUnit.Cell, true);
+        ColumnSettingsDataGrid.CommitEdit(DataGridEditingUnit.Row, true);
+        foreach (ColumnSetting setting in _columnSettings)
+        {
+            setting.Include = included;
+        }
+        ColumnSettingsDataGrid.Items.Refresh();
+    }
+
     private void ShowPreview(CsvPreview preview)
     {
         PreviewDataGrid.ItemsSource = null;

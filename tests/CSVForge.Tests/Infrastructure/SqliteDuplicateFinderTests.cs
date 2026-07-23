@@ -46,6 +46,28 @@ public sealed class SqliteDuplicateFinderTests
         Assert.Equal("Adam", page.Rows[1]["Name"]);
     }
 
+    [Theory]
+    [InlineData(true, 0)]
+    [InlineData(false, 1)]
+    public async Task FindDuplicatesUseCase_HandlesEmptyKeysAccordingToRequest(bool ignoreEmptyValues, int expectedRows)
+    {
+        ServiceProvider provider = await CreateProviderWithImportedCsvAsync(
+            "Email;Name\r\n;Ada\r\n;Ola\r\nvalid@example.com;Jan\r\n");
+        CsvImport import = (await provider.GetRequiredService<IListImportedTablesUseCase>().ExecuteAsync()).Single();
+
+        OperationResult result = await provider.GetRequiredService<IFindDuplicatesUseCase>()
+            .ExecuteAsync(new DuplicateSearchRequest(import.TableName, ["Email"], DuplicateSearchMode.Summary, ignoreEmptyValues));
+
+        TablePage page = await provider.GetRequiredService<IBrowseTableUseCase>()
+            .ExecuteAsync(new BrowseTableRequest(result.ResultTableName!, 10, 0, null, false, null));
+
+        Assert.Equal(expectedRows, page.Rows.Count);
+        if (!ignoreEmptyValues)
+        {
+            Assert.Equal("2", page.Rows[0]["duplicate_count"]);
+        }
+    }
+
     private static async Task<ServiceProvider> CreateProviderWithImportedCsvAsync(string content)
     {
         string directory = Path.Combine(Path.GetTempPath(), "CSVForge.Tests", Guid.NewGuid().ToString("N"));

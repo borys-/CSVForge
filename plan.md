@@ -1,6 +1,6 @@
 # Plan prac projektu CSVForge
 
-Status: implementacja MVP zakończona funkcjonalnie; trwa końcowy audyt i publikacja.
+Status: MVP ukończone, zweryfikowane i gotowe do publikacji.
 
 ## Zakres MVP
 
@@ -30,11 +30,11 @@ Status: implementacja MVP zakończona funkcjonalnie; trwa końcowy audyt i publi
 
 ## Końcowy audyt
 
-- [ ] Uzupełnić testy blokady SQLite, pustych kluczy i kodów wyjścia CLI.
-- [ ] Wykonać pełny build i testy w konfiguracjach Debug oraz Release.
-- [ ] Zweryfikować oba profile publikacji, ZIP-y i MSIX.
-- [ ] Wykonać test dymny CLI na świeżym workspace.
-- [ ] Sprawdzić czystość repozytorium i wypchnąć wszystkie commity do GitHub.
+- [x] Uzupełnić testy blokady SQLite, pustych kluczy i kodów wyjścia CLI.
+- [x] Wykonać pełny build i testy w konfiguracjach Debug oraz Release.
+- [x] Zweryfikować oba profile publikacji, ZIP-y i MSIX.
+- [x] Wykonać test dymny CLI na świeżym workspace.
+- [x] Sprawdzić czystość repozytorium i wypchnąć wszystkie commity do GitHub.
 
 ## Roadmapa po MVP
 

@@ -50,6 +50,28 @@ public sealed class SqliteWorkspaceServiceTests
         Assert.Equal(created.CreatedAt, opened.CreatedAt);
     }
 
+    [Fact]
+    public async Task OpenAsync_WhenDatabaseHasExclusiveLock_ThrowsSqliteBusy()
+    {
+        string workspacePath = Path.Combine(Path.GetTempPath(), "CSVForge.Tests", Guid.NewGuid().ToString("N"), "locked.db");
+        await using ServiceProvider provider = new ServiceCollection()
+            .AddInfrastructure()
+            .BuildServiceProvider();
+        IWorkspaceService service = provider.GetRequiredService<IWorkspaceService>();
+        await service.CreateAsync(workspacePath, CancellationToken.None);
+
+        await using SqliteConnection lockConnection = new($"Data Source={workspacePath};Default Timeout=1");
+        await lockConnection.OpenAsync();
+        await using SqliteCommand lockCommand = lockConnection.CreateCommand();
+        lockCommand.CommandText = "BEGIN EXCLUSIVE;";
+        await lockCommand.ExecuteNonQueryAsync();
+
+        SqliteException exception = await Assert.ThrowsAsync<SqliteException>(
+            () => service.OpenAsync(workspacePath, CancellationToken.None));
+
+        Assert.Equal(5, exception.SqliteErrorCode);
+    }
+
     private static async Task<IReadOnlySet<string>> ReadTablesAsync(string workspacePath, CancellationToken cancellationToken)
     {
         SqliteConnectionStringBuilder builder = new()

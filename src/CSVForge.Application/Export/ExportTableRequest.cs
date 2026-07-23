@@ -5,4 +5,5 @@ public sealed record ExportTableRequest(
     string OutputPath,
     char Delimiter,
     bool IncludeHeader,
-    string? TextFilter = null);
+    string? TextFilter = null,
+    IReadOnlyList<string>? Columns = null);

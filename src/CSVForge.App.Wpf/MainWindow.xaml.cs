@@ -47,6 +47,7 @@ public partial class MainWindow : Window
     private readonly ICompareDatasetsUseCase _compareDatasets;
     private readonly IJoinDatasetsUseCase _joinDatasets;
     private readonly IExportTableUseCase _exportTable;
+    private readonly ICreateTableFromResultUseCase _createTableFromResult;
     private readonly IListOperationsUseCase _listOperations;
     private readonly IDeleteImportUseCase _deleteImport;
     private readonly IRenameImportUseCase _renameImport;
@@ -82,6 +83,7 @@ public partial class MainWindow : Window
         ICompareDatasetsUseCase compareDatasets,
         IJoinDatasetsUseCase joinDatasets,
         IExportTableUseCase exportTable,
+        ICreateTableFromResultUseCase createTableFromResult,
         IListOperationsUseCase listOperations,
         IDeleteImportUseCase deleteImport,
         IRenameImportUseCase renameImport,
@@ -99,6 +101,7 @@ public partial class MainWindow : Window
         _compareDatasets = compareDatasets;
         _joinDatasets = joinDatasets;
         _exportTable = exportTable;
+        _createTableFromResult = createTableFromResult;
         _listOperations = listOperations;
         _deleteImport = deleteImport;
         _renameImport = renameImport;
@@ -464,6 +467,45 @@ public partial class MainWindow : Window
             return;
         }
 
+        string[] columns = DataGrid.Columns
+            .Select(column => column.Header?.ToString())
+            .Where(column => !string.IsNullOrWhiteSpace(column))
+            .Cast<string>()
+            .ToArray();
+        if (columns.Length == 0)
+        {
+            MessageBox.Show(this, "Tabela nie ma kolumn do eksportu.", "CSVForge", MessageBoxButton.OK, MessageBoxImage.Information);
+            return;
+        }
+
+        ExportResultWindow options = new(columns) { Owner = this };
+        if (options.ShowDialog() != true)
+        {
+            return;
+        }
+
+        if (!options.ExportToCsv)
+        {
+            await RunUiActionAsync(async cancellationToken =>
+            {
+                CreateTableFromResultResult result = await _createTableFromResult.ExecuteAsync(
+                    new CreateTableFromResultRequest(
+                        tableName,
+                        options.TargetTableName,
+                        options.SelectedColumns,
+                        FilterTextBox.Text.Trim()),
+                    cancellationToken);
+                _adHocTableName = result.TableName;
+                _pageOffset = 0;
+                await RefreshSelectedTableAsync();
+                await RefreshOperationsAsync();
+                MessageBox.Show(this,
+                    $"Utworzono tabelę „{result.TableName}” ({result.RowCount:N0} wierszy).",
+                    "CSVForge", MessageBoxButton.OK, MessageBoxImage.Information);
+            }, "Tabela utworzona");
+            return;
+        }
+
         SaveFileDialog dialog = new()
         {
             Filter = "CSV files (*.csv)|*.csv|All files (*.*)|*.*",
@@ -480,7 +522,15 @@ public partial class MainWindow : Window
 
         await RunUiActionAsync(async cancellationToken =>
         {
-            ExportResult result = await _exportTable.ExecuteAsync(new ExportTableRequest(tableName, dialog.FileName, ';', true, FilterTextBox.Text.Trim()), cancellationToken);
+            ExportResult result = await _exportTable.ExecuteAsync(
+                new ExportTableRequest(
+                    tableName,
+                    dialog.FileName,
+                    ';',
+                    true,
+                    FilterTextBox.Text.Trim(),
+                    options.SelectedColumns),
+                cancellationToken);
             MessageBox.Show(this, $"Wyeksportowano {result.ExportedRows} wierszy do:\n{result.FilePath}", "CSVForge", MessageBoxButton.OK, MessageBoxImage.Information);
         }, "Eksport zakończony");
     }
@@ -670,6 +720,7 @@ public partial class MainWindow : Window
         string? tableName = _adHocTableName ?? _selectedImport?.TableName;
         if (tableName is null)
         {
+            ExportResultButton.Visibility = Visibility.Collapsed;
             return;
         }
 
@@ -685,6 +736,7 @@ public partial class MainWindow : Window
 
             string title = _adHocTableName is null ? _selectedImport!.DisplayName : "Wynik operacji";
             TableTitleText.Text = $"{title} ({page.TotalRows} wierszy)";
+            ExportResultButton.Visibility = _adHocTableName is null ? Visibility.Collapsed : Visibility.Visible;
             ShowRows(page.Columns, ToRows(page));
             _totalRows = page.TotalRows;
             PreviousPageButton.IsEnabled = _pageOffset > 0;

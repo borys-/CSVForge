@@ -1,0 +1,70 @@
+<Window x:Class="CSVForge.App.Wpf.ExportResultWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Eksportuj wynik" Width="520" Height="570"
+        WindowStartupLocation="CenterOwner" ResizeMode="CanResizeWithGrip"
+        Background="#F5F7FB">
+    <Grid Margin="18">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+            <RowDefinition Height="Auto" />
+        </Grid.RowDefinitions>
+
+        <TextBlock Text="Eksportuj wynik" FontSize="22" FontWeight="SemiBold" />
+
+        <Border Grid.Row="1" Margin="0,14,0,12" Padding="14" Background="White"
+                BorderBrush="#D8DEE9" BorderThickness="1" CornerRadius="8">
+            <StackPanel>
+                <TextBlock Text="Miejsce docelowe" FontWeight="SemiBold" Margin="0,0,0,8" />
+                <RadioButton x:Name="CsvRadioButton" Content="Plik CSV" IsChecked="True"
+                             Checked="Destination_Changed" Margin="0,0,0,7" />
+                <RadioButton x:Name="TableRadioButton" Content="Nowa tabela w workspace"
+                             Checked="Destination_Changed" />
+                <Grid x:Name="TableNamePanel" Margin="22,10,0,0" IsEnabled="False">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="Auto" />
+                        <ColumnDefinition Width="*" />
+                    </Grid.ColumnDefinitions>
+                    <TextBlock Text="Nazwa tabeli" VerticalAlignment="Center" Margin="0,0,10,0" />
+                    <TextBox x:Name="TableNameTextBox" Grid.Column="1" Height="30"
+                             VerticalContentAlignment="Center" Text="wynik_eksportu" />
+                </Grid>
+            </StackPanel>
+        </Border>
+
+        <Grid Grid.Row="2" Margin="0,0,0,8">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="Auto" />
+                <ColumnDefinition Width="Auto" />
+            </Grid.ColumnDefinitions>
+            <TextBlock Text="Kolumny do eksportu" FontWeight="SemiBold" VerticalAlignment="Center" />
+            <Button Grid.Column="1" Content="Zaznacz wszystkie" Padding="10,5" Margin="8,0"
+                    Click="SelectAll_Click" />
+            <Button Grid.Column="2" Content="Wyczyść" Padding="10,5" Click="ClearAll_Click" />
+        </Grid>
+
+        <Border Grid.Row="3" Background="White" BorderBrush="#D8DEE9" BorderThickness="1"
+                CornerRadius="8" Padding="8">
+            <ScrollViewer VerticalScrollBarVisibility="Auto">
+                <StackPanel x:Name="ColumnsPanel" />
+            </ScrollViewer>
+        </Border>
+
+        <Grid Grid.Row="4" Margin="0,14,0,0">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="Auto" />
+                <ColumnDefinition Width="Auto" />
+            </Grid.ColumnDefinitions>
+            <TextBlock x:Name="ValidationText" Foreground="#B42318" VerticalAlignment="Center" />
+            <Button Grid.Column="1" Content="Anuluj" MinWidth="90" Margin="8,0"
+                    IsCancel="True" />
+            <Button Grid.Column="2" Content="Dalej" MinWidth="100" IsDefault="True"
+                    Background="#2563EB" Foreground="White" Click="Accept_Click" />
+        </Grid>
+    </Grid>
+</Window>

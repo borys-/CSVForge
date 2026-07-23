@@ -48,12 +48,22 @@ internal sealed class SqliteTableExporter(IWorkspaceContext workspaceContext) : 
     {
         await using SqliteConnection connection = SqliteConnectionFactory.Create(workspacePath);
         await connection.OpenAsync(cancellationToken);
-        IReadOnlyList<string> columns = await ReadColumnsAsync(connection, request.TableName, cancellationToken);
+        IReadOnlyList<string> tableColumns = await ReadColumnsAsync(connection, request.TableName, cancellationToken);
+        IReadOnlyList<string> columns = request.Columns is { Count: > 0 }
+            ? request.Columns
+            : tableColumns;
+        HashSet<string> availableColumns = tableColumns.ToHashSet(StringComparer.OrdinalIgnoreCase);
+        if (columns.Any(column => !availableColumns.Contains(column)))
+        {
+            throw new ArgumentException("At least one selected export column does not exist.", nameof(request));
+        }
+        SqliteIdentifierGuard.Columns(columns);
         await using SqliteCommand command = connection.CreateCommand();
         string whereClause = string.IsNullOrWhiteSpace(request.TextFilter)
             ? string.Empty
-            : " WHERE " + string.Join(" OR ", columns.Select(column => $"{CsvImportNameHelper.QuoteIdentifier(column)} LIKE $filter"));
-        command.CommandText = $"SELECT * FROM {CsvImportNameHelper.QuoteIdentifier(request.TableName)}{whereClause};";
+            : " WHERE " + string.Join(" OR ", tableColumns.Select(column => $"{CsvImportNameHelper.QuoteIdentifier(column)} LIKE $filter"));
+        string projection = string.Join(", ", columns.Select(CsvImportNameHelper.QuoteIdentifier));
+        command.CommandText = $"SELECT {projection} FROM {CsvImportNameHelper.QuoteIdentifier(request.TableName)}{whereClause};";
         if (!string.IsNullOrWhiteSpace(request.TextFilter))
         {
             command.Parameters.AddWithValue("$filter", $"%{request.TextFilter}%");

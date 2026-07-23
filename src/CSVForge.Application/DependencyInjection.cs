@@ -18,6 +18,7 @@ public static class DependencyInjection
         services.AddScoped<ICompareDatasetsUseCase, CompareDatasetsUseCase>();
         services.AddScoped<IJoinDatasetsUseCase, JoinDatasetsUseCase>();
         services.AddScoped<IExportTableUseCase, ExportTableUseCase>();
+        services.AddScoped<ICreateTableFromResultUseCase, CreateTableFromResultUseCase>();
         services.AddScoped<IListOperationsUseCase, ListOperationsUseCase>();
         services.AddScoped<IDeleteImportUseCase, DeleteImportUseCase>();
         services.AddScoped<IRenameImportUseCase, RenameImportUseCase>();

@@ -21,6 +21,7 @@ public static class DependencyInjection
         services.AddSingleton<IDatasetComparer, SqliteDatasetComparer>();
         services.AddSingleton<IDatasetJoiner, SqliteDatasetJoiner>();
         services.AddSingleton<ITableExporter, SqliteTableExporter>();
+        services.AddSingleton<ITableMaterializer, SqliteTableMaterializer>();
         services.AddSingleton<IOperationHistory, SqliteOperationHistory>();
         services.AddSingleton<ISqlExecutor, SqliteSqlExecutor>();
         services.AddSingleton<ISqlSchemaProvider, SqliteSqlSchemaProvider>();

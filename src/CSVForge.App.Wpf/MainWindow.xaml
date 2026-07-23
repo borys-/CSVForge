@@ -129,10 +129,16 @@
                                 <ColumnDefinition Width="Auto" />
                                 <ColumnDefinition Width="Auto" />
                                 <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" />
+                                <ColumnDefinition Width="Auto" />
                             </Grid.ColumnDefinitions>
                             <Button x:Name="PreviousPageButton" Content="←  Poprzednia" MinWidth="104" IsEnabled="False" Click="PreviousPage_Click" />
                             <Button x:Name="NextPageButton" Grid.Column="1" Content="Następna  →" MinWidth="104" Margin="8,0,0,0" IsEnabled="False" Click="NextPage_Click" />
-                            <TextBlock x:Name="PageStatusText" Grid.Column="2" HorizontalAlignment="Right" VerticalAlignment="Center"
+                            <Button x:Name="ExportResultButton" Grid.Column="3" Content="Eksportuj wynik"
+                                    Height="30" MinWidth="112" Margin="8,0,16,0" Padding="12,0"
+                                    Visibility="Collapsed" Click="ExportTable_Click"
+                                    ToolTip="Eksportuj aktualny wynik operacji do pliku CSV" />
+                            <TextBlock x:Name="PageStatusText" Grid.Column="4" HorizontalAlignment="Right" VerticalAlignment="Center"
                                        Foreground="{StaticResource TextMutedBrush}" Text="Brak danych" />
                         </Grid>
 

@@ -27,6 +27,16 @@ dotnet run --project src/CSVForge.Cli -- list-tables --workspace data/workspace.
 
 Every data command accepts `--workspace`. Run the CLI with `--help` for examples of duplicate search, comparison, joining, and export.
 
+## SQL editor
+
+The fourth operation tab contains an SQLite editor for the active workspace. It provides syntax highlighting, line numbers, schema-aware completion for tables, views and columns, alias-aware suggestions after `alias.`, and automatic bracket and quote pairing.
+
+- `Ctrl+Enter` executes the SQL script.
+- `Ctrl+Space` opens completion explicitly.
+- `Enter`, `Tab`, or a mouse click accepts a completion item.
+
+The completion catalog refreshes when the workspace changes, after a CSV import finishes, and after SQL that changes the schema. Query results are displayed in the virtualized data grid below the editor; rendering is capped at 10,000 rows.
+
 ## Publish
 
 ```powershell

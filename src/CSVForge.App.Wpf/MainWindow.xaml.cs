@@ -4,11 +4,13 @@ using System.Diagnostics;
 using System.Globalization;
 using System.IO;
 using System.Text.Json;
+using System.Xml;
 using CSVForge.Application.Abstractions;
 using CSVForge.Application.Export;
 using CSVForge.Application.Operations;
 using CSVForge.Application.Csv;
 using CSVForge.Application.Tables;
+using CSVForge.Application.Sql;
 using CSVForge.Domain.Imports;
 using CSVForge.Domain.Operations;
 using Microsoft.Win32;
@@ -18,6 +20,12 @@ using System.Windows.Data;
 using System.Windows.Input;
 using System.Windows.Media;
 using Microsoft.Data.Sqlite;
+using Serilog;
+using ICSharpCode.AvalonEdit.CodeCompletion;
+using ICSharpCode.AvalonEdit.Document;
+using ICSharpCode.AvalonEdit.Editing;
+using ICSharpCode.AvalonEdit.Highlighting;
+using ICSharpCode.AvalonEdit.Highlighting.Xshd;
 
 namespace CSVForge.App.Wpf;
 
@@ -43,6 +51,9 @@ public partial class MainWindow : Window
     private readonly IDeleteImportUseCase _deleteImport;
     private readonly IRenameImportUseCase _renameImport;
     private readonly IDeleteOperationUseCase _deleteOperation;
+    private readonly IExecuteSqlUseCase _executeSql;
+    private readonly IGetSqlSchemaUseCase _getSqlSchema;
+    private readonly SqlCompletionService _sqlCompletionService = new();
 
     private CsvImport? _selectedImport;
     private string? _adHocTableName;
@@ -56,6 +67,9 @@ public partial class MainWindow : Window
     private bool _workspaceSelectionReady;
     private bool _ignoreWorkspaceSelection;
     private bool _updatingComparisonFiles;
+    private int _activeImportCount;
+    private SqlSchemaSnapshot _sqlSchema = SqlSchemaSnapshot.Empty;
+    private CompletionWindow? _sqlCompletionWindow;
 
     public MainWindow(
         ICreateWorkspaceUseCase createWorkspace,
@@ -71,7 +85,9 @@ public partial class MainWindow : Window
         IListOperationsUseCase listOperations,
         IDeleteImportUseCase deleteImport,
         IRenameImportUseCase renameImport,
-        IDeleteOperationUseCase deleteOperation)
+        IDeleteOperationUseCase deleteOperation,
+        IExecuteSqlUseCase executeSql,
+        IGetSqlSchemaUseCase getSqlSchema)
     {
         _createWorkspace = createWorkspace;
         _openWorkspace = openWorkspace;
@@ -87,8 +103,11 @@ public partial class MainWindow : Window
         _deleteImport = deleteImport;
         _renameImport = renameImport;
         _deleteOperation = deleteOperation;
+        _executeSql = executeSql;
+        _getSqlSchema = getSqlSchema;
 
         InitializeComponent();
+        InitializeSqlEditor();
         _startupWorkspacePath = LoadRecentWorkspaces();
         Loaded += MainWindow_Loaded;
     }
@@ -169,6 +188,7 @@ public partial class MainWindow : Window
         SaveRecentWorkspace(fullPath);
         await RefreshImportsAsync();
         await RefreshOperationsAsync();
+        await RefreshSqlSchemaAsync();
     }
 
     private async void ChooseCsv_Click(object sender, RoutedEventArgs e)
@@ -185,13 +205,74 @@ public partial class MainWindow : Window
             {
                 Owner = this
             };
+            bool importRegistered = false;
+            previewWindow.ProgressChanged += progress =>
+            {
+                if (!importRegistered)
+                {
+                    importRegistered = true;
+                    _activeImportCount++;
+                }
+                ShowImportProgress(progress);
+            };
 
-            if (previewWindow.ShowDialog() == true && previewWindow.ImportedResult is { } result)
+            if (previewWindow.ShowDialog() == true && previewWindow.ImportTask is { } importTask)
             {
                 await RefreshImportsAsync();
-                SelectImport(result.Import.Id);
-                ExpandFilesPanelToFit(result.Import.DisplayName);
-                StatusText.Text = $"Zaimportowano {result.Import.RowCount} wierszy";
+                CsvImport? provisionalImport = (ImportsListBox.ItemsSource as IEnumerable<CsvImport>)
+                    ?.FirstOrDefault(item => string.Equals(item.SourcePath, dialog.FileName, StringComparison.OrdinalIgnoreCase));
+                if (provisionalImport is not null)
+                {
+                    SelectImport(provisionalImport.Id);
+                    ExpandFilesPanelToFit(provisionalImport.DisplayName);
+                }
+                _ = TrackBackgroundImportAsync(importTask, importRegistered);
+            }
+        }
+    }
+
+    private void ShowImportProgress(ImportProgress progress)
+    {
+        ImportWarningBorder.Visibility = Visibility.Visible;
+        ImportStatusText.Visibility = Visibility.Visible;
+        string remaining = progress.PercentRemaining is { } percent
+            ? $", pozostało około {percent}%"
+            : string.Empty;
+        ImportStatusText.Text = $"Import w tle: {progress.ProcessedRows:N0} wierszy{remaining}";
+    }
+
+    private async Task TrackBackgroundImportAsync(Task<ImportResult> importTask, bool importRegistered)
+    {
+        try
+        {
+            ImportResult result = await importTask;
+            await RefreshImportsAsync();
+            SelectImport(result.Import.Id);
+            ExpandFilesPanelToFit(result.Import.DisplayName);
+            StatusText.Text = $"Zaimportowano {result.Import.RowCount:N0} wierszy";
+            await RefreshSqlSchemaAsync();
+        }
+        catch (OperationCanceledException)
+        {
+            StatusText.Text = "Import anulowany";
+            await RefreshImportsAsync();
+        }
+        catch (Exception ex)
+        {
+            StatusText.Text = "Błąd importu";
+            await RefreshImportsAsync();
+            MessageBox.Show(this, PolishErrorMessage(ex), "CSVForge", MessageBoxButton.OK, MessageBoxImage.Error);
+        }
+        finally
+        {
+            if (importRegistered)
+            {
+                _activeImportCount = Math.Max(0, _activeImportCount - 1);
+            }
+            if (_activeImportCount == 0)
+            {
+                ImportStatusText.Visibility = Visibility.Collapsed;
+                ImportWarningBorder.Visibility = Visibility.Collapsed;
             }
         }
     }
@@ -205,6 +286,8 @@ public partial class MainWindow : Window
         _sortDescending = false;
         DuplicateColumnComboBox.ItemsSource = _selectedImport?.Columns.Select(column => column.Name).ToArray();
         DuplicateColumnComboBox.SelectedIndex = DuplicateColumnComboBox.Items.Count > 0 ? 0 : -1;
+        JoinLeftKeyColumnsComboBox.ItemsSource = _selectedImport?.Columns.Select(column => column.Name).ToArray();
+        JoinLeftKeyColumnsComboBox.SelectedIndex = JoinLeftKeyColumnsComboBox.Items.Count > 0 ? 0 : -1;
         UpdateComparisonFiles();
         LeftOutputColumnsTextBox.Text = _selectedImport is null ? string.Empty : string.Join(",", _selectedImport.Columns.Select(column => column.Name));
         await RefreshSelectedTableAsync();
@@ -288,6 +371,7 @@ public partial class MainWindow : Window
 
     private async void CompareTables_Click(object sender, RoutedEventArgs e)
     {
+        IReadOnlyList<string> leftKeys = ParseColumns(CompareLeftKeyColumnsComboBox.Text);
         IReadOnlyList<string> rightKeys = RightKeyColumns();
         if (CompareLeftTableComboBox.SelectedItem is not CsvImport leftImport)
         {
@@ -304,8 +388,7 @@ public partial class MainWindow : Window
             ShowValidationMessage("Lewy i prawy plik muszą być różne.");
             return;
         }
-        IReadOnlyList<string> keyColumns = SelectedKeyColumns();
-        if (keyColumns.Count == 0 || rightKeys.Count != keyColumns.Count)
+        if (leftKeys.Count == 0 || rightKeys.Count != leftKeys.Count)
         {
             ShowValidationMessage("Podaj taką samą liczbę kluczy dla lewego i prawego pliku.");
             return;
@@ -316,8 +399,8 @@ public partial class MainWindow : Window
             OperationResult result = await _compareDatasets.ExecuteAsync(new DatasetCompareRequest(
                 leftImport.TableName,
                 rightImport.TableName,
+                leftKeys,
                 rightKeys,
-                keyColumns,
                 SelectedEnum(CompareModeComboBox, DatasetCompareMode.AllWithStatus)));
 
             _adHocTableName = result.ResultTableName;
@@ -340,7 +423,7 @@ public partial class MainWindow : Window
             ShowValidationMessage("Wybierz prawy plik do połączenia.");
             return;
         }
-        IReadOnlyList<string> keyColumns = SelectedKeyColumns();
+        IReadOnlyList<string> keyColumns = ParseColumns(JoinLeftKeyColumnsComboBox.Text);
         if (keyColumns.Count == 0 || rightKeys.Count != keyColumns.Count)
         {
             ShowValidationMessage("Podaj taką samą liczbę kluczy dla lewego i prawego pliku.");
@@ -557,6 +640,7 @@ public partial class MainWindow : Window
             CompareLeftTableComboBox.SelectedItem = _selectedImport is null
                 ? null
                 : imports.FirstOrDefault(import => import.Id == _selectedImport.Id);
+            UpdateLeftComparisonKeys();
 
             CsvImport[] availableRightFiles = imports
                 .Where(import => _selectedImport is null || import.Id != _selectedImport.Id)
@@ -574,6 +658,7 @@ public partial class MainWindow : Window
 
     private void CompareLeftTableComboBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
     {
+        UpdateLeftComparisonKeys();
         if (!_updatingComparisonFiles && CompareLeftTableComboBox.SelectedItem is CsvImport leftImport)
         {
             ImportsListBox.SelectedItem = ImportsListBox.Items.Cast<CsvImport>().FirstOrDefault(import => import.Id == leftImport.Id);
@@ -621,10 +706,14 @@ public partial class MainWindow : Window
         return rows;
     }
 
-    private void ShowRows(IEnumerable<string> columns, IEnumerable<Dictionary<string, string?>> rows)
+    private void ShowRows(
+        IEnumerable<string> columns,
+        IEnumerable<Dictionary<string, string?>> rows,
+        bool allowSorting = true)
     {
         DataGrid.ItemsSource = null;
         DataGrid.Columns.Clear();
+        DataGrid.CanUserSortColumns = allowSorting;
 
         foreach (string column in columns)
         {
@@ -642,6 +731,211 @@ public partial class MainWindow : Window
         DataGrid.ItemsSource = rows;
     }
 
+    private async void ExecuteSql_Click(object sender, RoutedEventArgs e)
+    {
+        await ExecuteSqlAsync();
+    }
+
+    private void InitializeSqlEditor()
+    {
+        try
+        {
+            Uri resourceUri = new("/CSVForge;component/SqlHighlighting.xshd", UriKind.Relative);
+            using Stream stream = System.Windows.Application.GetResourceStream(resourceUri).Stream;
+            using XmlReader reader = XmlReader.Create(stream);
+            SqlQueryTextBox.SyntaxHighlighting = HighlightingLoader.Load(reader, null);
+        }
+        catch (Exception ex)
+        {
+            Log.Warning(ex, "Custom SQL highlighting could not be loaded; using AvalonEdit fallback.");
+            SqlQueryTextBox.SyntaxHighlighting = HighlightingManager.Instance.GetDefinition("SQL");
+        }
+        SqlQueryTextBox.Options.ConvertTabsToSpaces = true;
+        SqlQueryTextBox.Options.IndentationSize = 4;
+        SqlQueryTextBox.Options.HighlightCurrentLine = true;
+        SqlQueryTextBox.TextArea.AddHandler(
+            Keyboard.PreviewKeyDownEvent,
+            new KeyEventHandler(SqlEditor_PreviewKeyDown),
+            handledEventsToo: true);
+        SqlQueryTextBox.TextArea.TextEntered += SqlEditor_TextEntered;
+        SqlQueryTextBox.TextArea.TextEntering += SqlEditor_TextEntering;
+    }
+
+    private async void SqlEditor_PreviewKeyDown(object sender, KeyEventArgs e)
+    {
+        if (e.Key == Key.Tab && _sqlCompletionWindow is not null)
+        {
+            e.Handled = true;
+            _sqlCompletionWindow.CompletionList.RequestInsertion(e);
+            return;
+        }
+
+        if (e.Key == Key.Enter && Keyboard.Modifiers == ModifierKeys.Control)
+        {
+            e.Handled = true;
+            await ExecuteSqlAsync();
+            return;
+        }
+
+        if (e.Key == Key.Space && Keyboard.Modifiers == ModifierKeys.Control)
+        {
+            e.Handled = true;
+            ShowSqlCompletion();
+        }
+    }
+
+    private void SqlEditor_TextEntered(object? sender, TextCompositionEventArgs e)
+    {
+        if (e.Text.Length == 1 && (char.IsLetterOrDigit(e.Text[0]) || e.Text[0] is '_' or '.'))
+        {
+            ShowSqlCompletion();
+        }
+    }
+
+    private void SqlEditor_TextEntering(object? sender, TextCompositionEventArgs e)
+    {
+        if (string.IsNullOrEmpty(e.Text) || _sqlCompletionWindow is not null)
+        {
+            return;
+        }
+
+        char input = e.Text[0];
+        int offset = SqlQueryTextBox.CaretOffset;
+        Dictionary<char, char> pairs = new()
+        {
+            ['('] = ')',
+            ['['] = ']',
+            ['\''] = '\'',
+            ['"'] = '"'
+        };
+
+        if (pairs.Values.Contains(input)
+            && offset < SqlQueryTextBox.Document.TextLength
+            && SqlQueryTextBox.Document.GetCharAt(offset) == input)
+        {
+            SqlQueryTextBox.CaretOffset++;
+            e.Handled = true;
+            return;
+        }
+
+        if (pairs.TryGetValue(input, out char closing))
+        {
+            SqlQueryTextBox.Document.Insert(offset, $"{input}{closing}");
+            SqlQueryTextBox.CaretOffset = offset + 1;
+            e.Handled = true;
+        }
+    }
+
+    private void ShowSqlCompletion()
+    {
+        SqlCompletionResult result = _sqlCompletionService.GetSuggestions(
+            SqlQueryTextBox.Text,
+            SqlQueryTextBox.CaretOffset,
+            _sqlSchema);
+        if (result.Suggestions.Count == 0)
+        {
+            _sqlCompletionWindow?.Close();
+            return;
+        }
+
+        _sqlCompletionWindow?.Close();
+        CompletionWindow completionWindow = new(SqlQueryTextBox.TextArea)
+        {
+            StartOffset = result.ReplacementStart
+        };
+        completionWindow.CompletionList.IsFiltering = true;
+        foreach (SqlSuggestion suggestion in result.Suggestions)
+        {
+            completionWindow.CompletionList.CompletionData.Add(new SqlCompletionData(suggestion));
+        }
+        completionWindow.CompletionList.SelectedItem = completionWindow.CompletionList.CompletionData[0];
+        completionWindow.Closed += (_, _) =>
+        {
+            if (ReferenceEquals(_sqlCompletionWindow, completionWindow))
+            {
+                _sqlCompletionWindow = null;
+            }
+        };
+        _sqlCompletionWindow = completionWindow;
+        completionWindow.Show();
+    }
+
+    private async Task RefreshSqlSchemaAsync()
+    {
+        _sqlSchema = await _getSqlSchema.ExecuteAsync();
+    }
+
+    private async Task ExecuteSqlAsync()
+    {
+        await RunUiActionAsync(async cancellationToken =>
+        {
+            SqlQueryResult result = await _executeSql.ExecuteAsync(SqlQueryTextBox.Text, cancellationToken);
+            ShowRows(
+                result.Columns,
+                result.Rows.Select(row => row.ToDictionary(item => item.Key, item => item.Value, StringComparer.OrdinalIgnoreCase)),
+                allowSorting: false);
+
+            if (result.Columns.Count > 0)
+            {
+                string suffix = result.WasTruncated ? " — pokazano pierwsze 10 000" : string.Empty;
+                SqlStatusText.Text = $"Zwrócono {result.Rows.Count:N0} wierszy{suffix}";
+                TableTitleText.Text = $"Wynik SQL ({result.Rows.Count:N0} wierszy)";
+            }
+            else
+            {
+                SqlStatusText.Text = result.AffectedRows >= 0
+                    ? $"Polecenie wykonane. Zmienione wiersze: {result.AffectedRows:N0}"
+                    : "Polecenie wykonane";
+                TableTitleText.Text = "SQL wykonany";
+            }
+
+            await RefreshImportsAsync();
+            await RefreshOperationsAsync();
+            await RefreshSqlSchemaAsync();
+        }, "SQL wykonany");
+    }
+
+    private void ClearSql_Click(object sender, RoutedEventArgs e)
+    {
+        SqlQueryTextBox.Clear();
+        SqlQueryTextBox.Focus();
+        SqlStatusText.Text = "Ctrl+Enter wykonuje zapytanie";
+    }
+
+    private sealed class SqlCompletionData(SqlSuggestion suggestion) : ICompletionData
+    {
+        public System.Windows.Media.ImageSource? Image => null;
+        public string Text => suggestion.Text;
+        public object Content => $"{KindLabel(suggestion.Kind)}  {suggestion.Text}";
+        public object Description => suggestion.Description;
+        public double Priority => suggestion.Kind switch
+        {
+            SqlSuggestionKind.Table or SqlSuggestionKind.View => 4,
+            SqlSuggestionKind.Column => 3,
+            SqlSuggestionKind.Keyword => 2,
+            _ => 1
+        };
+
+        public void Complete(TextArea textArea, ISegment completionSegment, EventArgs insertionRequestEventArgs)
+        {
+            textArea.Document.Replace(completionSegment, Text);
+            if (Text.EndsWith("()", StringComparison.Ordinal))
+            {
+                textArea.Caret.Offset--;
+            }
+        }
+
+        private static string KindLabel(SqlSuggestionKind kind) => kind switch
+        {
+            SqlSuggestionKind.Keyword => "SQL",
+            SqlSuggestionKind.Function => "ƒ",
+            SqlSuggestionKind.Table => "T",
+            SqlSuggestionKind.View => "V",
+            SqlSuggestionKind.Column => "C",
+            _ => "•"
+        };
+    }
+
     private IReadOnlyList<string> SelectedKeyColumns()
     {
         return DuplicateColumnComboBox.Text.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
@@ -657,8 +951,29 @@ public partial class MainWindow : Window
         UpdateRightComparisonKeys();
     }
 
-    private void DuplicateColumnComboBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    private void CompareLeftKeyColumnsComboBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
     {
+        UpdateRightComparisonKeys();
+    }
+
+    private void UpdateLeftComparisonKeys()
+    {
+        if (CompareLeftTableComboBox.SelectedItem is not CsvImport import)
+        {
+            CompareLeftKeyColumnsComboBox.ItemsSource = null;
+            CompareLeftKeyColumnsComboBox.Text = string.Empty;
+            return;
+        }
+
+        string previousKeys = CompareLeftKeyColumnsComboBox.Text;
+        string[] columns = import.Columns.Select(column => column.Name).ToArray();
+        CompareLeftKeyColumnsComboBox.ItemsSource = columns;
+        IReadOnlyList<string> parsedPreviousKeys = ParseColumns(previousKeys);
+        string selectedKeys = parsedPreviousKeys.Count > 0
+            && parsedPreviousKeys.All(key => columns.Contains(key, StringComparer.OrdinalIgnoreCase))
+                ? string.Join(",", parsedPreviousKeys)
+                : columns.FirstOrDefault() ?? string.Empty;
+        CompareLeftKeyColumnsComboBox.Text = selectedKeys;
         UpdateRightComparisonKeys();
     }
 
@@ -673,7 +988,7 @@ public partial class MainWindow : Window
 
         string[] columns = import.Columns.Select(column => column.Name).ToArray();
         RightKeyColumnsTextBox.ItemsSource = columns;
-        IReadOnlyList<string> leftKeys = SelectedKeyColumns();
+        IReadOnlyList<string> leftKeys = ParseColumns(CompareLeftKeyColumnsComboBox.Text);
         string suggestedKeys = leftKeys.Count > 0 && leftKeys.All(key => columns.Contains(key, StringComparer.OrdinalIgnoreCase))
             ? string.Join(",", leftKeys)
             : columns.FirstOrDefault() ?? string.Empty;
@@ -692,10 +1007,18 @@ public partial class MainWindow : Window
 
         string[] columns = import.Columns.Select(column => column.Name).ToArray();
         RightOutputColumnsTextBox.Text = string.Join(",", columns);
-        IReadOnlyList<string> leftKeys = SelectedKeyColumns();
+        IReadOnlyList<string> leftKeys = ParseColumns(JoinLeftKeyColumnsComboBox.Text);
         JoinRightKeyColumnsTextBox.Text = leftKeys.All(key => columns.Contains(key, StringComparer.OrdinalIgnoreCase))
             ? string.Join(",", leftKeys)
             : columns.FirstOrDefault() ?? string.Empty;
+    }
+
+    private void JoinLeftKeyColumnsComboBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (JoinTableComboBox.SelectedItem is CsvImport)
+        {
+            JoinTableComboBox_SelectionChanged(sender, e);
+        }
     }
 
     private async void FilterTextBox_KeyDown(object sender, KeyEventArgs e)
@@ -786,11 +1109,11 @@ public partial class MainWindow : Window
         Process.Start(new ProcessStartInfo(AppPaths.LogsDirectory) { UseShellExecute = true });
     }
 
-    private void ShowHelp_Click(object sender, RoutedEventArgs e)
+    private void ShowAbout_Click(object sender, RoutedEventArgs e)
     {
         MessageBox.Show(this,
-            "1. Otwórz workspace.\n2. Wybierz plik CSV i przygotuj import.\n3. Wybierz plik, klucze oraz operację.\n4. Wyniki możesz filtrować, przeglądać stronami i eksportować.",
-            "CSVForge - pomoc", MessageBoxButton.OK, MessageBoxImage.Information);
+            "CSVForge\n\nAutor:\nBorys Patyk\nborys.patyk@gmail.com",
+            "O programie CSVForge", MessageBoxButton.OK, MessageBoxImage.Information);
     }
 
     private static string PolishErrorMessage(Exception exception)

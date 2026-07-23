@@ -5,5 +5,6 @@ public enum DatasetCompareMode
     CommonRows,
     LeftOnly,
     RightOnly,
+    DifferentRows,
     AllWithStatus
 }

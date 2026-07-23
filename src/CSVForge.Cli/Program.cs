@@ -213,7 +213,7 @@ public static class CliApplication
         import --workspace <db> --file <plik.csv> [--name <nazwa>] [--delimiter ;] [--batch-size 5000] [--no-header]
         list-tables --workspace <db>
         duplicates --workspace <db> --table <tabela> --columns <kol1,kol2> [--mode Summary|AllDuplicateRows]
-        compare --workspace <db> --left <tabela> --right <tabela> --left-keys <kolumny> --right-keys <kolumny> [--mode AllWithStatus]
+        compare --workspace <db> --left <tabela> --right <tabela> --left-keys <kolumny> --right-keys <kolumny> [--mode AllWithStatus|CommonRows|LeftOnly|RightOnly|DifferentRows]
         join --workspace <db> --left <tabela> --right <tabela> --left-keys <kolumny> --right-keys <kolumny> [--type Inner|Left|Right]
         export --workspace <db> --table <tabela> --output <plik.csv> [--delimiter ;] [--filter <tekst>] [--no-header]
         """);

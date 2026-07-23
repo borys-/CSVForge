@@ -39,6 +39,8 @@ public partial class ImportPreviewWindow : Window
     }
 
     public ImportResult? ImportedResult { get; private set; }
+    public Task<ImportResult>? ImportTask { get; private set; }
+    public event Action<ImportProgress>? ProgressChanged;
 
     private async void ImportPreviewWindow_Loaded(object sender, RoutedEventArgs e)
     {
@@ -76,7 +78,7 @@ public partial class ImportPreviewWindow : Window
         }
     }
 
-    private async void Import_Click(object sender, RoutedEventArgs e)
+    private void Import_Click(object sender, RoutedEventArgs e)
     {
         if (string.IsNullOrWhiteSpace(DisplayNameTextBox.Text))
         {
@@ -85,20 +87,45 @@ public partial class ImportPreviewWindow : Window
             return;
         }
 
+        SetBusy(true, "Importowanie pierwszej partii...");
+        Progress<ImportProgress> progress = new(ImportProgressChanged);
+        ImportTask = _importCsv.ExecuteAsync(CreateRequest(), progress);
+        _ = ObserveImportAsync(ImportTask);
+    }
+
+    private void ImportProgressChanged(ImportProgress progress)
+    {
+        OperationStatusText.Text = $"Zaimportowano: {progress.ProcessedRows:N0} wierszy";
+        ProgressChanged?.Invoke(progress);
+        if (IsVisible && progress.CurrentStep is "Batch committed" or "Import completed")
+        {
+            DialogResult = true;
+        }
+    }
+
+    private async Task ObserveImportAsync(Task<ImportResult> importTask)
+    {
         try
         {
-            SetBusy(true, "Importowanie...");
-            Progress<ImportProgress> progress = new(value => OperationStatusText.Text = $"Zaimportowano: {value.ProcessedRows} wierszy");
-            ImportedResult = await _importCsv.ExecuteAsync(CreateRequest(), progress);
-            DialogResult = true;
+            ImportedResult = await importTask;
+            if (IsVisible)
+            {
+                DialogResult = true;
+            }
         }
         catch (Exception ex)
         {
-            MessageBox.Show(this, ex.Message, "CSVForge", MessageBoxButton.OK, MessageBoxImage.Error);
+            if (IsVisible)
+            {
+                MessageBox.Show(this, ex.Message, "CSVForge", MessageBoxButton.OK, MessageBoxImage.Error);
+            }
         }
         finally
         {
-            SetBusy(false, string.Empty);
+            if (IsVisible)
+            {
+                SetBusy(false, string.Empty);
+            }
         }
     }
 

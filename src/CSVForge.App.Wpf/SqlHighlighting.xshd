@@ -1,0 +1,38 @@
+<?xml version="1.0"?>
+<SyntaxDefinition name="SQLite" extensions=".sql"
+                  xmlns="http://icsharpcode.net/sharpdevelop/syntaxdefinition/2008">
+  <Color name="Comment" foreground="#6B7280" fontStyle="italic" />
+  <Color name="Keyword" foreground="#1D4ED8" fontWeight="bold" />
+  <Color name="Function" foreground="#7C3AED" />
+  <Color name="String" foreground="#B45309" />
+  <Color name="Number" foreground="#047857" />
+  <Color name="Identifier" foreground="#0F766E" />
+  <RuleSet ignoreCase="true">
+    <Span color="Comment" begin="/\*" end="\*/" multiline="true" />
+    <Span color="Comment" begin="--" end="\n" />
+    <Span color="String" begin="'" end="'" />
+    <Span color="Identifier" begin="&quot;" end="&quot;" />
+    <Rule color="Number">\b(0x[0-9A-Fa-f]+|\d+(\.\d+)?)\b</Rule>
+    <Keywords color="Keyword">
+      <Word>SELECT</Word><Word>FROM</Word><Word>WHERE</Word><Word>JOIN</Word>
+      <Word>LEFT</Word><Word>RIGHT</Word><Word>INNER</Word><Word>OUTER</Word><Word>CROSS</Word>
+      <Word>ON</Word><Word>AS</Word><Word>AND</Word><Word>OR</Word><Word>NOT</Word>
+      <Word>NULL</Word><Word>IS</Word><Word>IN</Word><Word>EXISTS</Word><Word>BETWEEN</Word>
+      <Word>LIKE</Word><Word>GLOB</Word><Word>CASE</Word><Word>WHEN</Word><Word>THEN</Word>
+      <Word>ELSE</Word><Word>END</Word><Word>GROUP</Word><Word>BY</Word><Word>HAVING</Word>
+      <Word>ORDER</Word><Word>ASC</Word><Word>DESC</Word><Word>LIMIT</Word><Word>OFFSET</Word>
+      <Word>UNION</Word><Word>ALL</Word><Word>DISTINCT</Word><Word>WITH</Word><Word>RECURSIVE</Word>
+      <Word>INSERT</Word><Word>INTO</Word><Word>VALUES</Word><Word>UPDATE</Word><Word>SET</Word>
+      <Word>DELETE</Word><Word>CREATE</Word><Word>TABLE</Word><Word>VIEW</Word><Word>ALTER</Word>
+      <Word>DROP</Word><Word>PRAGMA</Word><Word>BEGIN</Word><Word>COMMIT</Word><Word>ROLLBACK</Word>
+      <Word>RETURNING</Word><Word>TRUE</Word><Word>FALSE</Word>
+    </Keywords>
+    <Keywords color="Function">
+      <Word>COUNT</Word><Word>SUM</Word><Word>AVG</Word><Word>MIN</Word><Word>MAX</Word>
+      <Word>COALESCE</Word><Word>IFNULL</Word><Word>NULLIF</Word><Word>ROUND</Word>
+      <Word>LENGTH</Word><Word>LOWER</Word><Word>UPPER</Word><Word>TRIM</Word>
+      <Word>SUBSTR</Word><Word>REPLACE</Word><Word>DATE</Word><Word>TIME</Word>
+      <Word>DATETIME</Word><Word>STRFTIME</Word><Word>CAST</Word><Word>TYPEOF</Word>
+    </Keywords>
+  </RuleSet>
+</SyntaxDefinition>

@@ -1,6 +1,7 @@
 using CSVForge.Application.Ports;
 using CSVForge.Infrastructure.Csv;
 using CSVForge.Infrastructure.Operations;
+using CSVForge.Infrastructure.Sqlite;
 using CSVForge.Infrastructure.Tables;
 using CSVForge.Infrastructure.Workspaces;
 using Microsoft.Extensions.DependencyInjection;
@@ -21,6 +22,8 @@ public static class DependencyInjection
         services.AddSingleton<IDatasetJoiner, SqliteDatasetJoiner>();
         services.AddSingleton<ITableExporter, SqliteTableExporter>();
         services.AddSingleton<IOperationHistory, SqliteOperationHistory>();
+        services.AddSingleton<ISqlExecutor, SqliteSqlExecutor>();
+        services.AddSingleton<ISqlSchemaProvider, SqliteSqlSchemaProvider>();
 
         return services;
     }

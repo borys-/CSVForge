@@ -10,7 +10,7 @@ internal static class SqliteConnectionFactory
         {
             DataSource = workspacePath,
             Mode = SqliteOpenMode.ReadWriteCreate,
-            Cache = SqliteCacheMode.Shared,
+            Cache = SqliteCacheMode.Private,
             DefaultTimeout = 2
         };
 

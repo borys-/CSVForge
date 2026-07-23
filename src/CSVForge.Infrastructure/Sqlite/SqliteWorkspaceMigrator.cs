@@ -8,6 +8,7 @@ internal static class SqliteWorkspaceMigrator
     {
         string sql = """
             PRAGMA foreign_keys = ON;
+            PRAGMA journal_mode = WAL;
 
             CREATE TABLE IF NOT EXISTS _workspace_info (
                 key TEXT PRIMARY KEY NOT NULL,

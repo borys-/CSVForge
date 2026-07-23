@@ -57,4 +57,38 @@ public sealed class SqliteDatasetComparerTests
         indexCommand.CommandText = "SELECT COUNT(*) FROM sqlite_master WHERE type = 'index' AND name LIKE 'idx_csvforge_%';";
         Assert.Equal(2L, (long)(await indexCommand.ExecuteScalarAsync() ?? 0L));
     }
+
+    [Fact]
+    public async Task CompareDatasetsUseCase_DifferentRowsReturnsBothExclusiveSides()
+    {
+        string directory = Path.Combine(Path.GetTempPath(), "CSVForge.Tests", Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(directory);
+        string workspacePath = Path.Combine(directory, "workspace.db");
+        string leftPath = Path.Combine(directory, "left.csv");
+        string rightPath = Path.Combine(directory, "right.csv");
+        await File.WriteAllTextAsync(leftPath, "Id\r\n1\r\n2\r\n");
+        await File.WriteAllTextAsync(rightPath, "Id\r\n1\r\n3\r\n");
+
+        ServiceProvider provider = new ServiceCollection().AddApplication().AddInfrastructure().BuildServiceProvider();
+        await provider.GetRequiredService<ICreateWorkspaceUseCase>().ExecuteAsync(workspacePath);
+        ImportResult left = await provider.GetRequiredService<IImportCsvUseCase>()
+            .ExecuteAsync(new ImportRequest(leftPath, "Left", true, null, null));
+        ImportResult right = await provider.GetRequiredService<IImportCsvUseCase>()
+            .ExecuteAsync(new ImportRequest(rightPath, "Right", true, null, null));
+
+        OperationResult result = await provider.GetRequiredService<ICompareDatasetsUseCase>()
+            .ExecuteAsync(new DatasetCompareRequest(
+                left.Import.TableName,
+                right.Import.TableName,
+                ["Id"],
+                ["Id"],
+                DatasetCompareMode.DifferentRows));
+        TablePage page = await provider.GetRequiredService<IBrowseTableUseCase>()
+            .ExecuteAsync(new BrowseTableRequest(result.ResultTableName!, 10, 0, "Id", false, null));
+
+        Assert.Equal(2, page.Rows.Count);
+        Assert.Contains(page.Rows, row => row["Id"] == "2" && row["status_porównania"] == "tylko lewy");
+        Assert.Contains(page.Rows, row => row["Id"] == "3" && row["status_porównania"] == "tylko prawy");
+        Assert.DoesNotContain(page.Rows, row => row["Id"] == "1");
+    }
 }

@@ -78,6 +78,18 @@ internal sealed class SqliteDatasetComparer(IWorkspaceContext workspaceContext) 
                 LEFT JOIN {left} AS l ON {joinPredicate}
                 WHERE {BuildNullPredicate(request.LeftKeyColumns, "l")};
                 """,
+            DatasetCompareMode.DifferentRows => $"""
+                CREATE TABLE {result} AS
+                SELECT {leftKeys}, '{LeftOnlyStatus}' AS {CsvImportNameHelper.QuoteIdentifier(StatusColumn)}
+                FROM {left} AS l
+                LEFT JOIN {right} AS r ON {joinPredicate}
+                WHERE {BuildNullPredicate(request.RightKeyColumns, "r")}
+                UNION ALL
+                SELECT {rightKeys}, '{RightOnlyStatus}' AS {CsvImportNameHelper.QuoteIdentifier(StatusColumn)}
+                FROM {right} AS r
+                LEFT JOIN {left} AS l ON {joinPredicate}
+                WHERE {BuildNullPredicate(request.LeftKeyColumns, "l")};
+                """,
             DatasetCompareMode.AllWithStatus => $"""
                 CREATE TABLE {result} AS
                 SELECT {leftKeys}, '{CommonStatus}' AS {CsvImportNameHelper.QuoteIdentifier(StatusColumn)}

@@ -103,49 +103,95 @@ internal sealed class CsvImporterService(IWorkspaceContext workspaceContext) : I
 
         long rowCount = 0;
         List<ImportError> errors = [];
-        await using SqliteTransaction transaction = (SqliteTransaction)await connection.BeginTransactionAsync(cancellationToken);
-        using RawRowWriter writer = new(connection, tableName, columnNames, mappings);
-
-        if (!hasHeader && TryWriteRecord(firstRecord, csv.Parser.Row, csv.Parser.RawRecord, sourceHeaders.Count, mappings, writer, errors))
-        {
-            rowCount++;
-        }
-        if (secondRecord is not null && TryWriteRecord(secondRecord, csv.Parser.Row, csv.Parser.RawRecord, sourceHeaders.Count, mappings, writer, errors))
-        {
-            rowCount++;
-        }
-
-        while (await csv.ReadAsync())
-        {
-            cancellationToken.ThrowIfCancellationRequested();
-            string[] record = CsvHeaderDetector.TrimTrailingEmptyColumns(csv.Parser.Record ?? [], trailingEmptyColumns);
-            if (TryWriteRecord(record, csv.Parser.Row, csv.Parser.RawRecord, sourceHeaders.Count, mappings, writer, errors))
-            {
-                rowCount++;
-                if (rowCount % request.BatchSize == 0)
-                {
-                    progress?.Report(new ImportProgress(rowCount, null, "Importing rows"));
-                }
-            }
-        }
-
-        await transaction.CommitAsync(cancellationToken);
-
         DateTimeOffset importedAt = DateTimeOffset.UtcNow;
-        CsvImport import = new(
+        CsvImport CreateImport(long count) => new(
             importId,
             request.DisplayName,
             request.FilePath,
             tableName,
             importedAt,
-            rowCount,
+            count,
             originalHeaders.Select((header, index) => new CsvColumn(header, columnNames[index], index)).ToArray());
 
-        await SaveMetadataAsync(connection, import, cancellationToken);
-        await SaveErrorsAsync(connection, import.Id, errors, cancellationToken);
-        progress?.Report(new ImportProgress(rowCount, rowCount, "Import completed"));
+        bool metadataSaved = false;
+        SqliteTransaction? transaction = null;
+        try
+        {
+            transaction = (SqliteTransaction)await connection.BeginTransactionAsync(cancellationToken);
+            using RawRowWriter writer = new(connection, tableName, columnNames, mappings);
 
-        return import;
+            if (!hasHeader && TryWriteRecord(firstRecord, csv.Parser.Row, csv.Parser.RawRecord, sourceHeaders.Count, mappings, writer, errors))
+            {
+                rowCount++;
+            }
+            if (secondRecord is not null && TryWriteRecord(secondRecord, csv.Parser.Row, csv.Parser.RawRecord, sourceHeaders.Count, mappings, writer, errors))
+            {
+                rowCount++;
+            }
+
+            while (await csv.ReadAsync())
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                string[] record = CsvHeaderDetector.TrimTrailingEmptyColumns(csv.Parser.Record ?? [], trailingEmptyColumns);
+                if (!TryWriteRecord(record, csv.Parser.Row, csv.Parser.RawRecord, sourceHeaders.Count, mappings, writer, errors))
+                {
+                    continue;
+                }
+
+                rowCount++;
+                if (rowCount % request.BatchSize == 0)
+                {
+                    await transaction.CommitAsync(cancellationToken);
+                    await transaction.DisposeAsync();
+                    transaction = null;
+
+                    if (!metadataSaved)
+                    {
+                        await SaveMetadataAsync(connection, CreateImport(rowCount), cancellationToken);
+                        metadataSaved = true;
+                    }
+                    else
+                    {
+                        await UpdateImportRowCountAsync(connection, importId, rowCount, cancellationToken);
+                    }
+
+                    int percentRemaining = stream.Length == 0
+                        ? 0
+                        : Math.Clamp((int)Math.Ceiling(100d * (stream.Length - stream.Position) / stream.Length), 0, 100);
+                    progress?.Report(new ImportProgress(rowCount, null, "Batch committed", percentRemaining));
+                    cancellationToken.ThrowIfCancellationRequested();
+                    transaction = (SqliteTransaction)await connection.BeginTransactionAsync(cancellationToken);
+                }
+            }
+
+            await transaction.CommitAsync(cancellationToken);
+            await transaction.DisposeAsync();
+            transaction = null;
+
+            CsvImport import = CreateImport(rowCount);
+            if (!metadataSaved)
+            {
+                await SaveMetadataAsync(connection, import, cancellationToken);
+            }
+            else
+            {
+                await UpdateImportRowCountAsync(connection, importId, rowCount, cancellationToken);
+            }
+
+            await SaveErrorsAsync(connection, import.Id, errors, cancellationToken);
+            progress?.Report(new ImportProgress(rowCount, rowCount, "Import completed", 0));
+
+            return import;
+        }
+        catch
+        {
+            if (transaction is not null)
+            {
+                await transaction.DisposeAsync();
+            }
+            await RemovePartialImportAsync(connection, importId, tableName);
+            throw;
+        }
     }
 
     private static CsvConfiguration CreateConfiguration(char delimiter)
@@ -355,6 +401,31 @@ internal sealed class CsvImporterService(IWorkspaceContext workspaceContext) : I
         }
 
         await transaction.CommitAsync(cancellationToken);
+    }
+
+    private static async Task UpdateImportRowCountAsync(
+        SqliteConnection connection,
+        Guid importId,
+        long rowCount,
+        CancellationToken cancellationToken)
+    {
+        await using SqliteCommand command = connection.CreateCommand();
+        command.CommandText = "UPDATE _workspace_imports SET row_count = $rowCount WHERE id = $id;";
+        command.Parameters.AddWithValue("$rowCount", rowCount);
+        command.Parameters.AddWithValue("$id", importId.ToString());
+        await command.ExecuteNonQueryAsync(cancellationToken);
+    }
+
+    private static async Task RemovePartialImportAsync(SqliteConnection connection, Guid importId, string tableName)
+    {
+        await using SqliteCommand deleteMetadata = connection.CreateCommand();
+        deleteMetadata.CommandText = "DELETE FROM _workspace_imports WHERE id = $id;";
+        deleteMetadata.Parameters.AddWithValue("$id", importId.ToString());
+        await deleteMetadata.ExecuteNonQueryAsync();
+
+        await using SqliteCommand dropTable = connection.CreateCommand();
+        dropTable.CommandText = $"DROP TABLE IF EXISTS {CsvImportNameHelper.QuoteIdentifier(tableName)};";
+        await dropTable.ExecuteNonQueryAsync();
     }
 
     private static async Task<IReadOnlyList<ImportError>> ReadErrorsAsync(SqliteConnection connection, Guid importId, CancellationToken cancellationToken)

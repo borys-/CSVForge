@@ -152,6 +152,42 @@ public sealed class CsvImporterServiceTests
     }
 
     [Fact]
+    public async Task ImportCsvUseCase_FirstCommittedBatchIsVisibleBeforeImportCompletes()
+    {
+        string directory = Path.Combine(Path.GetTempPath(), "CSVForge.Tests", Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(directory);
+        string workspacePath = Path.Combine(directory, "workspace.db");
+        string csvPath = Path.Combine(directory, "data.csv");
+        await File.WriteAllTextAsync(csvPath, "Id\r\n1\r\n2\r\n3\r\n4\r\n5\r\n");
+        ServiceProvider provider = new ServiceCollection().AddApplication().AddInfrastructure().BuildServiceProvider();
+        await provider.GetRequiredService<ICreateWorkspaceUseCase>().ExecuteAsync(workspacePath);
+        bool firstBatchWasVisible = false;
+        InlineProgress progress = new(value =>
+        {
+            if (value.CurrentStep != "Batch committed" || firstBatchWasVisible)
+            {
+                return;
+            }
+
+            using SqliteConnection connection = new($"Data Source={workspacePath}");
+            connection.Open();
+            using SqliteCommand command = connection.CreateCommand();
+            command.CommandText = """
+                SELECT COUNT(*)
+                FROM _workspace_imports AS imports
+                JOIN sqlite_master AS tables ON tables.name = imports.table_name
+                WHERE imports.row_count = 2;
+                """;
+            firstBatchWasVisible = (long)(command.ExecuteScalar() ?? 0L) == 1;
+        });
+
+        await provider.GetRequiredService<IImportCsvUseCase>()
+            .ExecuteAsync(new ImportRequest(csvPath, "Data", true, null, null, 2), progress);
+
+        Assert.True(firstBatchWasVisible);
+    }
+
+    [Fact]
     public async Task ImportCsvUseCase_ImportsHeaderOnlyAsEmptyTable()
     {
         (ServiceProvider provider, string csvPath) = await CreateWorkspaceAndCsvAsync("Name;City\r\n");

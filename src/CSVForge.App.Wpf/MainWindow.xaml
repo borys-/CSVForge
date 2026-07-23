@@ -1,10 +1,11 @@
 <Window x:Class="CSVForge.App.Wpf.MainWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        Title="CSVForge" Height="760" Width="1240" MinHeight="680" MinWidth="1040"
-        Background="#F6F7F9">
+        xmlns:avalonEdit="http://icsharpcode.net/sharpdevelop/avalonedit"
+        Title="CSVForge" Height="820" Width="1380" MinHeight="720" MinWidth="1100"
+        Background="{StaticResource AppBackgroundBrush}" WindowStartupLocation="CenterScreen">
     <DockPanel>
-        <Border DockPanel.Dock="Top" Background="#17202A" Padding="16,12">
+        <Border DockPanel.Dock="Top" Background="#111827" Padding="20,14">
             <Grid>
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="Auto" />
@@ -16,41 +17,70 @@
                     <ColumnDefinition Width="Auto" />
                     <ColumnDefinition Width="Auto" />
                 </Grid.ColumnDefinitions>
-                <TextBlock Text="CSVForge" Foreground="White" FontSize="20" FontWeight="SemiBold" VerticalAlignment="Center" />
+                <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                    <Border Width="32" Height="32" CornerRadius="8" Background="#2563EB" Margin="0,0,10,0">
+                        <TextBlock Text="C" Foreground="White" FontSize="17" FontWeight="Bold"
+                                   HorizontalAlignment="Center" VerticalAlignment="Center" />
+                    </Border>
+                    <StackPanel>
+                        <TextBlock Text="CSVForge" Foreground="White" FontSize="17" FontWeight="SemiBold" />
+                        <TextBlock Text="DATA WORKBENCH" Foreground="#8290A6" FontSize="9" FontWeight="SemiBold" />
+                    </StackPanel>
+                </StackPanel>
                 <TextBlock x:Name="WorkspaceStatusText" Grid.Column="1" Visibility="Collapsed" />
-                <ProgressBar x:Name="OperationProgressBar" Grid.Column="2" Width="110" Height="8" Margin="0,0,12,0" IsIndeterminate="True" Visibility="Collapsed" />
-                <Button x:Name="CancelOperationButton" Grid.Column="3" Content="Anuluj" Height="28" Margin="0,0,12,0" Padding="10,0" Visibility="Collapsed" Click="CancelOperation_Click" />
-                <ComboBox x:Name="WorkspacePathTextBox" Grid.Column="4" Width="300" Height="28" Margin="0,0,8,0"
+                <ComboBox x:Name="WorkspacePathTextBox" Grid.Column="2" Width="320" Height="34" Margin="0,0,8,0"
                           VerticalContentAlignment="Center" SelectionChanged="WorkspacePathTextBox_SelectionChanged" ToolTip="Aktywny workspace" />
-                <Button Grid.Column="5" Content="Logi" Height="28" Margin="0,0,8,0" Padding="10,0" Click="OpenLogs_Click" />
-                <Button Grid.Column="6" Content="Pomoc" Height="28" Margin="0,0,12,0" Padding="10,0" Click="ShowHelp_Click" />
-                <TextBlock x:Name="StatusText" Grid.Column="7" Foreground="#D6DEE8" VerticalAlignment="Center" Text="Gotowy" />
+                <Button Grid.Column="3" Content="Logi" Style="{StaticResource ToolbarButton}" Margin="0,0,8,0" Click="OpenLogs_Click" />
+                <Button Grid.Column="4" Content="O programie" Style="{StaticResource ToolbarButton}" Click="ShowAbout_Click" />
             </Grid>
         </Border>
 
-        <Grid Margin="16">
+        <Border DockPanel.Dock="Bottom" Background="{StaticResource SurfaceBrush}" BorderBrush="{StaticResource BorderBrush}"
+                BorderThickness="0,1,0,0" Padding="20,9">
             <Grid>
                 <Grid.ColumnDefinitions>
-                    <ColumnDefinition x:Name="FilesPanelColumn" Width="300" MinWidth="220" MaxWidth="600" />
-                    <ColumnDefinition Width="14" />
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+                <ProgressBar x:Name="OperationProgressBar" Width="110" Height="6" Margin="0,0,12,0"
+                             IsIndeterminate="True" Visibility="Collapsed" VerticalAlignment="Center" />
+                <TextBlock x:Name="StatusText" Grid.Column="1" Foreground="{StaticResource TextMutedBrush}"
+                           VerticalAlignment="Center" Text="Gotowy" />
+                <TextBlock x:Name="ImportStatusText" Grid.Column="2" Foreground="#B45309" FontWeight="SemiBold"
+                           VerticalAlignment="Center" Margin="16,0" Visibility="Collapsed" />
+                <Button x:Name="CancelOperationButton" Grid.Column="3" Content="Anuluj operację" MinHeight="28"
+                        Padding="10,0" Visibility="Collapsed" Click="CancelOperation_Click" />
+            </Grid>
+        </Border>
+
+        <Grid Margin="20">
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition x:Name="FilesPanelColumn" Width="300" MinWidth="240" MaxWidth="600" />
+                    <ColumnDefinition Width="16" />
                     <ColumnDefinition Width="*" />
                 </Grid.ColumnDefinitions>
 
-                <Border Background="White" BorderBrush="#D8DEE8" BorderThickness="1" CornerRadius="6" Padding="12">
+                <Border Background="{StaticResource SurfaceBrush}" BorderBrush="{StaticResource BorderBrush}" BorderThickness="1" CornerRadius="10" Padding="14">
                     <DockPanel>
                         <Grid DockPanel.Dock="Top" Margin="0,0,0,10">
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="*" />
                                 <ColumnDefinition Width="Auto" />
                             </Grid.ColumnDefinitions>
-                            <TextBlock Text="Pliki CSV" FontSize="16" FontWeight="SemiBold" VerticalAlignment="Center" />
-                            <Button Grid.Column="1" Width="30" Height="30" Content="+" FontSize="20" FontWeight="SemiBold"
-                                    Background="#218739" Foreground="White" BorderBrush="#176B2C"
+                            <StackPanel>
+                                <TextBlock Text="Pliki CSV" FontSize="16" FontWeight="SemiBold" />
+                                <TextBlock Text="Źródła danych workspace" Foreground="{StaticResource TextMutedBrush}" FontSize="11" Margin="0,2,0,0" />
+                            </StackPanel>
+                            <Button Grid.Column="1" Width="34" Height="34" Content="+" FontSize="19" FontWeight="SemiBold"
+                                    Style="{StaticResource PrimaryButton}" Padding="0"
                                     ToolTip="Dodaj plik CSV" Click="ChooseCsv_Click" />
                         </Grid>
 
                         <Expander DockPanel.Dock="Bottom" Header="Historia operacji" Margin="0,10,0,0" IsExpanded="False">
-                            <Border BorderBrush="#D8DEE8" BorderThickness="1" Margin="0,6,0,0" Height="150">
+                            <Border Background="{StaticResource SurfaceMutedBrush}" BorderBrush="{StaticResource BorderBrush}" BorderThickness="1" CornerRadius="6" Margin="0,6,0,0" Height="150">
                                 <ListBox x:Name="OperationsListBox" SelectionChanged="OperationsListBox_SelectionChanged"
                                          PreviewMouseRightButtonDown="ListBox_PreviewMouseRightButtonDown">
                                     <ListBox.ContextMenu>
@@ -92,7 +122,7 @@
                               Background="Transparent" Cursor="SizeWE" ResizeDirection="Columns" ResizeBehavior="PreviousAndNext"
                               ShowsPreview="True" ToolTip="Zmień szerokość panelu plików" />
 
-                <Border Grid.Column="2" Background="White" BorderBrush="#D8DEE8" BorderThickness="1" CornerRadius="6" Padding="12">
+                <Border Grid.Column="2" Background="{StaticResource SurfaceBrush}" BorderBrush="{StaticResource BorderBrush}" BorderThickness="1" CornerRadius="10" Padding="16">
                     <DockPanel>
                         <Grid DockPanel.Dock="Bottom" Margin="0,10,0,0">
                             <Grid.ColumnDefinitions>
@@ -100,9 +130,10 @@
                                 <ColumnDefinition Width="Auto" />
                                 <ColumnDefinition Width="*" />
                             </Grid.ColumnDefinitions>
-                            <Button x:Name="PreviousPageButton" Content="Poprzednia" Height="30" MinWidth="90" IsEnabled="False" Click="PreviousPage_Click" />
-                            <Button x:Name="NextPageButton" Grid.Column="1" Content="Następna" Height="30" MinWidth="90" Margin="8,0,0,0" IsEnabled="False" Click="NextPage_Click" />
-                            <TextBlock x:Name="PageStatusText" Grid.Column="2" HorizontalAlignment="Right" VerticalAlignment="Center" Text="Brak danych" />
+                            <Button x:Name="PreviousPageButton" Content="←  Poprzednia" MinWidth="104" IsEnabled="False" Click="PreviousPage_Click" />
+                            <Button x:Name="NextPageButton" Grid.Column="1" Content="Następna  →" MinWidth="104" Margin="8,0,0,0" IsEnabled="False" Click="NextPage_Click" />
+                            <TextBlock x:Name="PageStatusText" Grid.Column="2" HorizontalAlignment="Right" VerticalAlignment="Center"
+                                       Foreground="{StaticResource TextMutedBrush}" Text="Brak danych" />
                         </Grid>
 
                         <StackPanel DockPanel.Dock="Top" Margin="0,0,0,10">
@@ -114,42 +145,43 @@
                                     <ColumnDefinition Width="Auto" />
                                     <ColumnDefinition Width="Auto" />
                                 </Grid.ColumnDefinitions>
-                                <TextBlock x:Name="TableTitleText" Text="Dane" FontSize="16" FontWeight="SemiBold" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
-                                <TextBlock Grid.Column="1" Text="Filtr wierszy" Margin="16,0,8,0" VerticalAlignment="Center" />
+                                <TextBlock x:Name="TableTitleText" Text="Podgląd danych" FontSize="18" FontWeight="SemiBold" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
+                                <TextBlock Grid.Column="1" Text="Filtr" Foreground="{StaticResource TextMutedBrush}" Margin="18,0,8,0" VerticalAlignment="Center" />
                                 <TextBox x:Name="FilterTextBox" Grid.Column="2" Height="30" VerticalContentAlignment="Center" KeyDown="FilterTextBox_KeyDown" />
                                 <Button Grid.Column="3" Content="Wyczyść" Height="30" MinWidth="76" Margin="8,0,0,0" Padding="12,0" Click="ClearFilter_Click" />
-                                <Button Grid.Column="4" Content="Filtruj" Height="30" MinWidth="78" Margin="8,0,0,0" Padding="12,0" Click="RefreshTable_Click" />
+                                <Button Grid.Column="4" Content="Filtruj" Style="{StaticResource PrimaryButton}" MinWidth="78" Margin="8,0,0,0" Click="RefreshTable_Click" />
                             </Grid>
 
-                            <Grid Margin="0,10,0,8">
-                                <Grid.ColumnDefinitions>
-                                    <ColumnDefinition Width="Auto" />
-                                    <ColumnDefinition Width="360" />
-                                    <ColumnDefinition Width="*" />
-                                </Grid.ColumnDefinitions>
-                                <TextBlock Text="Klucze lewego pliku" VerticalAlignment="Center" />
-                                <ComboBox x:Name="DuplicateColumnComboBox" Grid.Column="1" Height="30" Margin="10,0,0,0" IsEditable="True"
-                                          SelectionChanged="DuplicateColumnComboBox_SelectionChanged"
-                                          ToolTip="Wybierz jedną kolumnę lub wpisz kilka nazw oddzielonych przecinkami" />
-                            </Grid>
+                            <Border x:Name="ImportWarningBorder" Background="#FFF7E6" BorderBrush="#F5C76B" BorderThickness="1"
+                                    CornerRadius="7" Padding="10,8" Margin="0,0,0,8" Visibility="Collapsed">
+                                <TextBlock Foreground="#92400E" TextWrapping="Wrap"
+                                           Text="Import danych nadal trwa. Wynik porównania, łączenia lub wyszukiwania duplikatów może być niepełny. Operacje pozostają dostępne." />
+                            </Border>
 
                             <TabControl MinHeight="156" Padding="4">
                                 <TabItem Header="Duplikaty">
                                     <Grid Margin="8">
+                                        <Grid.RowDefinitions>
+                                            <RowDefinition Height="Auto" />
+                                            <RowDefinition Height="Auto" />
+                                        </Grid.RowDefinitions>
                                         <Grid.ColumnDefinitions>
                                             <ColumnDefinition Width="Auto" />
-                                            <ColumnDefinition Width="200" />
+                                            <ColumnDefinition Width="260" />
                                             <ColumnDefinition Width="Auto" />
                                             <ColumnDefinition Width="*" />
                                             <ColumnDefinition Width="Auto" />
                                         </Grid.ColumnDefinitions>
-                                        <TextBlock Text="Widok wyniku" VerticalAlignment="Center" />
-                                        <ComboBox x:Name="DuplicateModeComboBox" Grid.Column="1" Height="30" Margin="10,0,20,0" SelectedIndex="0">
+                                        <TextBlock Text="Kolumny kluczowe" VerticalAlignment="Center" />
+                                        <ComboBox x:Name="DuplicateColumnComboBox" Grid.Column="1" Grid.ColumnSpan="3" Height="30" Margin="10,0,20,6"
+                                                  IsEditable="True" ToolTip="Wybierz jedną kolumnę lub wpisz kilka nazw oddzielonych przecinkami" />
+                                        <TextBlock Grid.Row="1" Text="Widok wyniku" VerticalAlignment="Center" />
+                                        <ComboBox x:Name="DuplicateModeComboBox" Grid.Row="1" Grid.Column="1" Height="30" Margin="10,0,20,0" SelectedIndex="0">
                                             <ComboBoxItem Content="Wszystkie wiersze" Tag="AllDuplicateRows" />
                                             <ComboBoxItem Content="Podsumowanie" Tag="Summary" />
                                         </ComboBox>
-                                        <CheckBox x:Name="IgnoreEmptyKeysCheckBox" Grid.Column="2" Content="Pomiń puste klucze" IsChecked="True" VerticalAlignment="Center" />
-                                        <Button Grid.Column="4" Content="Znajdź duplikaty" Height="32" MinWidth="132" Padding="14,0" Click="FindDuplicates_Click" />
+                                        <CheckBox x:Name="IgnoreEmptyKeysCheckBox" Grid.Row="1" Grid.Column="2" Content="Pomiń puste klucze" IsChecked="True" VerticalAlignment="Center" />
+                                        <Button Grid.Row="1" Grid.Column="4" Content="Znajdź duplikaty" Style="{StaticResource PrimaryButton}" MinWidth="142" Click="FindDuplicates_Click" />
                                     </Grid>
                                 </TabItem>
 
@@ -164,32 +196,38 @@
                                             <ColumnDefinition Width="Auto" />
                                             <ColumnDefinition Width="*" />
                                             <ColumnDefinition Width="Auto" />
-                                            <ColumnDefinition Width="180" />
+                                            <ColumnDefinition Width="220" />
                                             <ColumnDefinition Width="Auto" />
                                         </Grid.ColumnDefinitions>
                                         <TextBlock Text="Lewy plik" VerticalAlignment="Center" />
-                                        <ComboBox x:Name="CompareLeftTableComboBox" Grid.Column="1" Grid.ColumnSpan="4" Height="30" Margin="10,0,0,6"
+                                        <ComboBox x:Name="CompareLeftTableComboBox" Grid.Column="1" Height="30" Margin="10,0,18,6"
                                                   DisplayMemberPath="SourcePath" SelectionChanged="CompareLeftTableComboBox_SelectionChanged" />
+                                        <TextBlock Grid.Column="2" Text="Klucze lewe" VerticalAlignment="Center" />
+                                        <ComboBox x:Name="CompareLeftKeyColumnsComboBox" Grid.Column="3" Grid.ColumnSpan="2" Height="30" Margin="10,0,0,6"
+                                                  IsEditable="True" SelectionChanged="CompareLeftKeyColumnsComboBox_SelectionChanged"
+                                                  ToolTip="Wybierz jedną kolumnę lub wpisz kilka nazw oddzielonych przecinkami" />
                                         <TextBlock Grid.Row="1" Text="Prawy plik" VerticalAlignment="Center" />
-                                        <ComboBox x:Name="CompareTableComboBox" Grid.Row="1" Grid.Column="1" Grid.ColumnSpan="4" Height="30" Margin="10,0,0,6"
+                                        <ComboBox x:Name="CompareTableComboBox" Grid.Row="1" Grid.Column="1" Height="30" Margin="10,0,18,6"
                                                   DisplayMemberPath="SourcePath" SelectionChanged="CompareTableComboBox_SelectionChanged" />
-                                        <TextBlock Grid.Row="2" Text="Klucze prawe" VerticalAlignment="Center" />
-                                        <ComboBox x:Name="RightKeyColumnsTextBox" Grid.Row="2" Grid.Column="1" Height="30" Margin="10,0,18,0"
+                                        <TextBlock Grid.Row="1" Grid.Column="2" Text="Klucze prawe" VerticalAlignment="Center" />
+                                        <ComboBox x:Name="RightKeyColumnsTextBox" Grid.Row="1" Grid.Column="3" Grid.ColumnSpan="2" Height="30" Margin="10,0,0,6"
                                                   IsEditable="True" ToolTip="Wybierz jedną kolumnę lub wpisz kilka nazw oddzielonych przecinkami" />
-                                        <TextBlock Grid.Row="2" Grid.Column="2" Text="Wynik" VerticalAlignment="Center" />
-                                        <ComboBox x:Name="CompareModeComboBox" Grid.Row="2" Grid.Column="3" Height="30" Margin="10,0,18,0" SelectedIndex="0">
+                                        <TextBlock Grid.Row="2" Text="Wynik" VerticalAlignment="Center" />
+                                        <ComboBox x:Name="CompareModeComboBox" Grid.Row="2" Grid.Column="1" Height="30" Margin="10,0,18,0" SelectedIndex="0">
                                             <ComboBoxItem Content="Wszystko ze statusem" Tag="AllWithStatus" />
                                             <ComboBoxItem Content="Wspólne" Tag="CommonRows" />
                                             <ComboBoxItem Content="Tylko lewa" Tag="LeftOnly" />
                                             <ComboBoxItem Content="Tylko prawa" Tag="RightOnly" />
+                                            <ComboBoxItem Content="Różne" Tag="DifferentRows" />
                                         </ComboBox>
-                                        <Button Grid.Row="2" Grid.Column="4" Content="Porównaj pliki" Height="32" MinWidth="126" Padding="14,0" Click="CompareTables_Click" />
+                                        <Button Grid.Row="2" Grid.Column="4" Content="Porównaj pliki" Style="{StaticResource PrimaryButton}" MinWidth="132" Click="CompareTables_Click" />
                                     </Grid>
                                 </TabItem>
 
                                 <TabItem Header="Połącz">
                                     <Grid Margin="8">
                                         <Grid.RowDefinitions>
+                                            <RowDefinition Height="Auto" />
                                             <RowDefinition Height="Auto" />
                                             <RowDefinition Height="Auto" />
                                         </Grid.RowDefinitions>
@@ -202,22 +240,63 @@
                                             <ColumnDefinition Width="110" />
                                             <ColumnDefinition Width="Auto" />
                                         </Grid.ColumnDefinitions>
-                                        <TextBlock Text="Prawy plik" VerticalAlignment="Center" />
-                                        <ComboBox x:Name="JoinTableComboBox" Grid.Column="1" Height="30" Margin="10,0,18,0" DisplayMemberPath="DisplayName" SelectionChanged="JoinTableComboBox_SelectionChanged" />
-                                        <TextBlock Grid.Column="2" Text="Klucze prawe" VerticalAlignment="Center" />
-                                        <TextBox x:Name="JoinRightKeyColumnsTextBox" Grid.Column="3" Height="30" Margin="10,0,18,0" VerticalContentAlignment="Center" />
-                                        <TextBlock Grid.Column="4" Text="Typ" VerticalAlignment="Center" />
-                                        <ComboBox x:Name="JoinTypeComboBox" Grid.Column="5" Height="30" Margin="10,0,18,0" SelectedIndex="0">
+                                        <TextBlock Text="Klucze lewe" VerticalAlignment="Center" />
+                                        <ComboBox x:Name="JoinLeftKeyColumnsComboBox" Grid.Column="1" Height="30" Margin="10,0,18,6"
+                                                  IsEditable="True" SelectionChanged="JoinLeftKeyColumnsComboBox_SelectionChanged"
+                                                  ToolTip="Wybierz jedną kolumnę lub wpisz kilka nazw oddzielonych przecinkami" />
+                                        <TextBlock Grid.Column="2" Text="Prawy plik" VerticalAlignment="Center" />
+                                        <ComboBox x:Name="JoinTableComboBox" Grid.Column="3" Grid.ColumnSpan="3" Height="30" Margin="10,0,18,6"
+                                                  DisplayMemberPath="DisplayName" SelectionChanged="JoinTableComboBox_SelectionChanged" />
+
+                                        <TextBlock Grid.Row="1" Text="Klucze prawe" VerticalAlignment="Center" />
+                                        <TextBox x:Name="JoinRightKeyColumnsTextBox" Grid.Row="1" Grid.Column="1" Grid.ColumnSpan="3" Height="30" Margin="10,0,18,0" VerticalContentAlignment="Center" />
+                                        <TextBlock Grid.Row="1" Grid.Column="4" Text="Typ" VerticalAlignment="Center" />
+                                        <ComboBox x:Name="JoinTypeComboBox" Grid.Row="1" Grid.Column="5" Height="30" Margin="10,0,18,0" SelectedIndex="0">
                                             <ComboBoxItem Content="LEFT" Tag="Left" />
                                             <ComboBoxItem Content="INNER" Tag="Inner" />
                                             <ComboBoxItem Content="RIGHT" Tag="Right" />
                                         </ComboBox>
-                                        <Button Grid.Column="6" Content="Połącz pliki" Height="32" MinWidth="126" Padding="14,0" Click="JoinTables_Click" />
+                                        <Button Grid.Row="1" Grid.Column="6" Content="Połącz pliki" Style="{StaticResource PrimaryButton}" MinWidth="132" Click="JoinTables_Click" />
 
-                                        <TextBlock Grid.Row="1" Text="Kolumny lewe" Margin="0,8,0,0" VerticalAlignment="Center" />
-                                        <TextBox x:Name="LeftOutputColumnsTextBox" Grid.Row="1" Grid.Column="1" Height="28" Margin="10,8,18,0" VerticalContentAlignment="Center" />
-                                        <TextBlock Grid.Row="1" Grid.Column="2" Text="Kolumny prawe" Margin="0,8,0,0" VerticalAlignment="Center" />
-                                        <TextBox x:Name="RightOutputColumnsTextBox" Grid.Row="1" Grid.Column="3" Grid.ColumnSpan="3" Height="28" Margin="10,8,18,0" VerticalContentAlignment="Center" />
+                                        <TextBlock Grid.Row="2" Text="Kolumny lewe" Margin="0,8,0,0" VerticalAlignment="Center" />
+                                        <TextBox x:Name="LeftOutputColumnsTextBox" Grid.Row="2" Grid.Column="1" Height="28" Margin="10,8,18,0" VerticalContentAlignment="Center" />
+                                        <TextBlock Grid.Row="2" Grid.Column="2" Text="Kolumny prawe" Margin="0,8,0,0" VerticalAlignment="Center" />
+                                        <TextBox x:Name="RightOutputColumnsTextBox" Grid.Row="2" Grid.Column="3" Grid.ColumnSpan="3" Height="28" Margin="10,8,18,0" VerticalContentAlignment="Center" />
+                                    </Grid>
+                                </TabItem>
+
+                                <TabItem Header="SQL">
+                                    <Grid Margin="8">
+                                        <Grid.RowDefinitions>
+                                            <RowDefinition Height="Auto" />
+                                            <RowDefinition Height="120" />
+                                            <RowDefinition Height="Auto" />
+                                        </Grid.RowDefinitions>
+                                        <TextBlock Text="Zapytanie do aktywnego workspace" FontWeight="SemiBold" />
+                                        <Border Grid.Row="1" Margin="0,7,0,7" BorderBrush="{StaticResource BorderBrush}"
+                                                BorderThickness="1" CornerRadius="6" ClipToBounds="True">
+                                            <avalonEdit:TextEditor x:Name="SqlQueryTextBox"
+                                                                   ShowLineNumbers="True"
+                                                                   FontFamily="Cascadia Mono, Consolas"
+                                                                   FontSize="13"
+                                                                   Background="#FBFCFE"
+                                                                   Foreground="{StaticResource TextBrush}"
+                                                                   HorizontalScrollBarVisibility="Auto"
+                                                                   VerticalScrollBarVisibility="Auto"
+                                                                   Text="SELECT name, type FROM sqlite_master ORDER BY type, name;" />
+                                        </Border>
+                                        <Grid Grid.Row="2">
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="*" />
+                                                <ColumnDefinition Width="Auto" />
+                                                <ColumnDefinition Width="Auto" />
+                                            </Grid.ColumnDefinitions>
+                                            <TextBlock x:Name="SqlStatusText" Foreground="{StaticResource TextMutedBrush}"
+                                                       VerticalAlignment="Center" Text="Ctrl+Enter wykonuje zapytanie" />
+                                            <Button Grid.Column="1" Content="Wyczyść" Margin="8,0" Click="ClearSql_Click" />
+                                            <Button Grid.Column="2" Content="Wykonaj SQL" Style="{StaticResource PrimaryButton}"
+                                                    MinWidth="120" Click="ExecuteSql_Click" />
+                                        </Grid>
                                     </Grid>
                                 </TabItem>
                             </TabControl>

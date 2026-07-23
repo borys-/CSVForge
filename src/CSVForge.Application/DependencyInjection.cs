@@ -22,6 +22,8 @@ public static class DependencyInjection
         services.AddScoped<IDeleteImportUseCase, DeleteImportUseCase>();
         services.AddScoped<IRenameImportUseCase, RenameImportUseCase>();
         services.AddScoped<IDeleteOperationUseCase, DeleteOperationUseCase>();
+        services.AddScoped<IExecuteSqlUseCase, ExecuteSqlUseCase>();
+        services.AddScoped<IGetSqlSchemaUseCase, GetSqlSchemaUseCase>();
 
         return services;
     }

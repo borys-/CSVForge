@@ -104,7 +104,13 @@ public sealed class CsvImporterServiceTests
         await using SqliteConnection connection = new($"Data Source={workspacePath}");
         await connection.OpenAsync();
         await using SqliteCommand command = connection.CreateCommand();
-        command.CommandText = "SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name LIKE 'import_%';";
+        command.CommandText = """
+            SELECT COUNT(*)
+            FROM sqlite_master
+            WHERE type = 'table'
+              AND name NOT LIKE '\_%' ESCAPE '\'
+              AND name NOT LIKE 'sqlite_%';
+            """;
         Assert.Equal(0L, (long)(await command.ExecuteScalarAsync() ?? 0L));
         Assert.Empty(await provider.GetRequiredService<IListImportedTablesUseCase>().ExecuteAsync());
     }

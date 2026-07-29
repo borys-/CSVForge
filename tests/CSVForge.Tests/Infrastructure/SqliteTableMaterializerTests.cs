@@ -38,8 +38,8 @@ public sealed class SqliteTableMaterializerTests
         Assert.Single(page.Rows);
         Assert.Equal("Ada", page.Rows[0]["Name"]);
 
-        var operations = await provider.GetRequiredService<IListOperationsUseCase>().ExecuteAsync();
-        Assert.Contains(operations, operation => operation.ResultTableName == "wybrane_osoby");
+        IReadOnlyList<CsvImport> imports = await provider.GetRequiredService<IListImportedTablesUseCase>().ExecuteAsync();
+        Assert.Contains(imports, item => item.TableName == "wybrane_osoby" && item.RowCount == 1);
     }
 
     [Fact]

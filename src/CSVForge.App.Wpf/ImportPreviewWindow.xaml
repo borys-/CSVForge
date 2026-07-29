@@ -75,7 +75,14 @@
                     <TextBlock DockPanel.Dock="Bottom" Text="Odznacz kolumnę, aby ją pominąć. Nazwy i typy można edytować." Foreground="#52606D" TextWrapping="Wrap" Margin="0,8,0,0" />
                     <DataGrid x:Name="ColumnSettingsDataGrid" AutoGenerateColumns="False" CanUserAddRows="False" CanUserDeleteRows="False" HeadersVisibility="Column" GridLinesVisibility="Horizontal">
                         <DataGrid.Columns>
-                            <DataGridCheckBoxColumn Header="Import" Binding="{Binding Include, UpdateSourceTrigger=PropertyChanged}" Width="58" />
+                            <DataGridTemplateColumn Header="Import" Width="58">
+                                <DataGridTemplateColumn.CellTemplate>
+                                    <DataTemplate>
+                                        <CheckBox IsChecked="{Binding Include, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                                  HorizontalAlignment="Center" VerticalAlignment="Center" />
+                                    </DataTemplate>
+                                </DataGridTemplateColumn.CellTemplate>
+                            </DataGridTemplateColumn>
                             <DataGridTextColumn Header="Źródło" Binding="{Binding SourceName}" IsReadOnly="True" Width="*" MinWidth="90" />
                             <DataGridTextColumn Header="Nazwa" Binding="{Binding Name, UpdateSourceTrigger=PropertyChanged}" Width="*" MinWidth="90" />
                             <DataGridComboBoxColumn x:Name="ColumnTypeDataGridColumn" Header="Typ" DisplayMemberPath="Label" SelectedValuePath="Value" SelectedValueBinding="{Binding DataType, UpdateSourceTrigger=PropertyChanged}" Width="135" />

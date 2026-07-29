@@ -44,12 +44,11 @@ public sealed class SqliteDatasetComparerTests
             .ExecuteAsync(new BrowseTableRequest(result.ResultTableName!, 10, 0, "Email", false, null));
 
         Assert.Equal(3, page.Rows.Count);
-        Assert.Contains(page.Rows, row => row["Email"] == "a@example.com" && row["status_porównania"] == "wspólne");
-        Assert.Contains(page.Rows, row => row["Email"] == "b@example.com" && row["status_porównania"] == "tylko lewy");
-        Assert.Contains(page.Rows, row => row["Email"] == "c@example.com" && row["status_porównania"] == "tylko prawy");
-        Assert.Contains("wspólne: 1", result.Message);
-        Assert.Contains("tylko lewy: 1", result.Message);
-        Assert.Contains("tylko prawy: 1", result.Message);
+        Assert.Contains(page.Rows, row => row["Email"] == "a@example.com" && row["status_porównania"] == "We wszystkich plikach");
+        Assert.Contains(page.Rows, row => row["Email"] == "b@example.com" && row["status_porównania"] == "Tylko w: plik 1");
+        Assert.Contains(page.Rows, row => row["Email"] == "c@example.com" && row["status_porównania"] == "Tylko w: plik 2");
+        Assert.Contains(page.Rows, row => row["Email"] == "b@example.com" && row["plik1"] == "✓" && row["plik2"] == "");
+        Assert.Contains(page.Rows, row => row["Email"] == "c@example.com" && row["plik1"] == "" && row["plik2"] == "✓");
 
         await using SqliteConnection connection = new($"Data Source={workspacePath}");
         await connection.OpenAsync();
@@ -87,8 +86,49 @@ public sealed class SqliteDatasetComparerTests
             .ExecuteAsync(new BrowseTableRequest(result.ResultTableName!, 10, 0, "Id", false, null));
 
         Assert.Equal(2, page.Rows.Count);
-        Assert.Contains(page.Rows, row => row["Id"] == "2" && row["status_porównania"] == "tylko lewy");
-        Assert.Contains(page.Rows, row => row["Id"] == "3" && row["status_porównania"] == "tylko prawy");
+        Assert.Contains(page.Rows, row => row["Id"] == "2" && row["status_porównania"] == "Tylko w: plik 1");
+        Assert.Contains(page.Rows, row => row["Id"] == "3" && row["status_porównania"] == "Tylko w: plik 2");
         Assert.DoesNotContain(page.Rows, row => row["Id"] == "1");
+    }
+
+    [Fact]
+    public async Task CompareDatasetsUseCase_DescribesPresenceAcrossThreeFiles()
+    {
+        string directory = Path.Combine(Path.GetTempPath(), "CSVForge.Tests", Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(directory);
+        string workspacePath = Path.Combine(directory, "workspace.db");
+        string[] paths = [Path.Combine(directory, "a.csv"), Path.Combine(directory, "b.csv"), Path.Combine(directory, "c.csv")];
+        await File.WriteAllTextAsync(paths[0], "Id\r\n1\r\n2\r\n4\r\n");
+        await File.WriteAllTextAsync(paths[1], "Id\r\n2\r\n3\r\n4\r\n");
+        await File.WriteAllTextAsync(paths[2], "Id\r\n2\r\n3\r\n5\r\n");
+
+        ServiceProvider provider = new ServiceCollection().AddApplication().AddInfrastructure().BuildServiceProvider();
+        await provider.GetRequiredService<ICreateWorkspaceUseCase>().ExecuteAsync(workspacePath);
+        ImportResult[] imports = new ImportResult[3];
+        for (int index = 0; index < paths.Length; index++)
+        {
+            imports[index] = await provider.GetRequiredService<IImportCsvUseCase>()
+                .ExecuteAsync(new ImportRequest(paths[index], $"Raport {index + 1}", true, null, null));
+        }
+
+        OperationResult result = await provider.GetRequiredService<ICompareDatasetsUseCase>()
+            .ExecuteAsync(new DatasetCompareRequest(
+            [
+                new(imports[0].Import.TableName, "Raport 1", ["Id"]),
+                new(imports[1].Import.TableName, "Raport 2", ["Id"]),
+                new(imports[2].Import.TableName, "Raport 3", ["Id"])
+            ], DatasetCompareMode.AllWithStatus));
+        TablePage page = await provider.GetRequiredService<IBrowseTableUseCase>()
+            .ExecuteAsync(new BrowseTableRequest(result.ResultTableName!, 20, 0, "Id", false, null));
+
+        Assert.Contains(page.Rows, row => row["Id"] == "1" && row["status_porównania"] == "Tylko w: plik 1");
+        Assert.Contains(page.Rows, row => row["Id"] == "2" && row["status_porównania"] == "We wszystkich plikach");
+        Assert.Contains(page.Rows, row => row["Id"] == "3" && row["status_porównania"] == "W plikach: plik 2, plik 3");
+        Assert.Contains(page.Rows, row => row["Id"] == "4" && row["status_porównania"] == "W plikach: plik 1, plik 2");
+        Assert.Contains(page.Rows, row => row["Id"] == "5" && row["status_porównania"] == "Tylko w: plik 3");
+        Assert.Contains(page.Rows, row => row["Id"] == "3"
+            && row["plik1"] == ""
+            && row["plik2"] == "✓"
+            && row["plik3"] == "✓");
     }
 }

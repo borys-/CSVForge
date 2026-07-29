@@ -51,7 +51,7 @@ internal static class CsvImportNameHelper
 
     public static string CreateTableName(string displayName)
     {
-        return $"import_{NormalizeIdentifier(displayName, "csv", 39)}_{DateTimeOffset.UtcNow:yyyyMMddHHmmssfff}";
+        return $"{NormalizeIdentifier(displayName, "csv", 46)}_{DateTimeOffset.UtcNow:yyyyMMddHHmmssfff}";
     }
 
     public static string QuoteIdentifier(string value)

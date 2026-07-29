@@ -32,6 +32,17 @@ namespace CSVForge.App.Wpf;
 public partial class MainWindow : Window
 {
     private const int PageSize = 200;
+    private static readonly Brush ComparisonAllFilesBrush = CreateFrozenBrush("#DCFCE7");
+    private static readonly Brush ComparisonSingleFileBrush = CreateFrozenBrush("#FEE2E2");
+    private static readonly Brush[] ComparisonCombinationBrushes =
+    [
+        CreateFrozenBrush("#DBEAFE"),
+        CreateFrozenBrush("#FEF3C7"),
+        CreateFrozenBrush("#EDE9FE"),
+        CreateFrozenBrush("#FFEDD5"),
+        CreateFrozenBrush("#CCFBF1"),
+        CreateFrozenBrush("#FCE7F3")
+    ];
     private const string CreateNewWorkspaceItem = "+ Utwórz nowy workspace...";
     private static readonly string RecentWorkspacesPath = Path.Combine(AppPaths.DataDirectory, "recent-workspaces.json");
     private static readonly string DefaultWorkspacePath = Path.Combine(
@@ -72,6 +83,7 @@ public partial class MainWindow : Window
     private SqlSchemaSnapshot _sqlSchema = SqlSchemaSnapshot.Empty;
     private CompletionWindow? _sqlCompletionWindow;
     private string? _sqlResultQuery;
+    private readonly List<AdditionalCompareFileRow> _additionalCompareFiles = [];
 
     public MainWindow(
         ICreateWorkspaceUseCase createWorkspace,
@@ -327,6 +339,64 @@ public partial class MainWindow : Window
         await RefreshSelectedTableAsync();
     }
 
+    private void DataGrid_LoadingRow(object sender, DataGridRowEventArgs e)
+    {
+        e.Row.ClearValue(Control.BackgroundProperty);
+        if (e.Row.Item is not IReadOnlyDictionary<string, string?> row)
+        {
+            return;
+        }
+
+        (int Index, bool Present)[] presence = row
+            .Where(item => TryGetComparisonFileIndex(item.Key, out _))
+            .Select(item =>
+            {
+                TryGetComparisonFileIndex(item.Key, out int index);
+                return (Index: index, Present: string.Equals(item.Value, "✓", StringComparison.Ordinal));
+            })
+            .OrderBy(item => item.Index)
+            .ToArray();
+        if (presence.Length < 2)
+        {
+            return;
+        }
+
+        int presentCount = presence.Count(item => item.Present);
+        if (presentCount == presence.Length)
+        {
+            e.Row.Background = ComparisonAllFilesBrush;
+            return;
+        }
+        if (presentCount == 1)
+        {
+            e.Row.Background = ComparisonSingleFileBrush;
+            return;
+        }
+
+        int combinationHash = 17;
+        foreach ((int index, bool present) in presence)
+        {
+            combinationHash = unchecked(combinationHash * 31 + (present ? index + 1 : 0));
+        }
+        e.Row.Background = ComparisonCombinationBrushes[(combinationHash & int.MaxValue) % ComparisonCombinationBrushes.Length];
+    }
+
+    private static bool TryGetComparisonFileIndex(string columnName, out int index)
+    {
+        const string prefix = "plik";
+        index = 0;
+        return columnName.StartsWith(prefix, StringComparison.OrdinalIgnoreCase)
+            && int.TryParse(columnName.AsSpan(prefix.Length), out index)
+            && index > 0;
+    }
+
+    private static Brush CreateFrozenBrush(string color)
+    {
+        SolidColorBrush brush = new((Color)ColorConverter.ConvertFromString(color));
+        brush.Freeze();
+        return brush;
+    }
+
     private async void PreviousPage_Click(object sender, RoutedEventArgs e)
     {
         _pageOffset = Math.Max(0, _pageOffset - PageSize);
@@ -387,28 +457,45 @@ public partial class MainWindow : Window
             ShowValidationMessage("Wybierz prawy plik do porównania.");
             return;
         }
-        if (rightImport.Id == leftImport.Id)
+        List<DatasetCompareSource> sources =
+        [
+            new(leftImport.TableName, leftImport.DisplayName, leftKeys),
+            new(rightImport.TableName, rightImport.DisplayName, rightKeys)
+        ];
+        foreach (AdditionalCompareFileRow row in _additionalCompareFiles)
         {
-            ShowValidationMessage("Lewy i prawy plik muszą być różne.");
+            if (row.FileComboBox.SelectedItem is not CsvImport import)
+            {
+                ShowValidationMessage("Wybierz plik w każdym wierszu porównania.");
+                return;
+            }
+            sources.Add(new DatasetCompareSource(
+                import.TableName,
+                import.DisplayName,
+                ParseColumns(row.KeysComboBox.Text)));
+        }
+
+        if (sources.Select(source => source.TableName).Distinct(StringComparer.OrdinalIgnoreCase).Count() != sources.Count)
+        {
+            ShowValidationMessage("Każdy porównywany plik musi być inny.");
             return;
         }
-        if (leftKeys.Count == 0 || rightKeys.Count != leftKeys.Count)
+        if (leftKeys.Count == 0 || sources.Any(source => source.KeyColumns.Count != leftKeys.Count))
         {
-            ShowValidationMessage("Podaj taką samą liczbę kluczy dla lewego i prawego pliku.");
+            ShowValidationMessage("Podaj taką samą liczbę kluczy dla każdego pliku.");
             return;
         }
 
         await RunUiActionAsync(async () =>
         {
             OperationResult result = await _compareDatasets.ExecuteAsync(new DatasetCompareRequest(
-                leftImport.TableName,
-                rightImport.TableName,
-                leftKeys,
-                rightKeys,
+                sources,
                 SelectedEnum(CompareModeComboBox, DatasetCompareMode.AllWithStatus)));
 
             _adHocTableName = result.ResultTableName;
             _pageOffset = 0;
+            _sortColumn = leftKeys[0];
+            _sortDescending = false;
             await RefreshSelectedTableAsync();
             await RefreshOperationsAsync();
         }, "Porównanie gotowe");
@@ -500,8 +587,8 @@ public partial class MainWindow : Window
                     cancellationToken);
                 _adHocTableName = result.TableName;
                 _pageOffset = 0;
+                await RefreshImportsAsync();
                 await RefreshSelectedTableAsync();
-                await RefreshOperationsAsync();
                 MessageBox.Show(this,
                     $"Utworzono tabelę „{result.TableName}” ({result.RowCount:N0} wierszy).",
                     "CSVForge", MessageBoxButton.OK, MessageBoxImage.Information);
@@ -703,10 +790,173 @@ public partial class MainWindow : Window
             CompareTableComboBox.SelectedItem = previousRight is not null
                 ? availableRightFiles.FirstOrDefault(import => import.Id == previousRight.Id) ?? availableRightFiles.FirstOrDefault()
                 : availableRightFiles.FirstOrDefault();
+
+            foreach (AdditionalCompareFileRow row in _additionalCompareFiles)
+            {
+                CsvImport? previous = row.FileComboBox.SelectedItem as CsvImport;
+                row.FileComboBox.ItemsSource = imports;
+                row.FileComboBox.SelectedItem = previous is null
+                    ? imports.FirstOrDefault(import => !SelectedComparisonImportIds(row).Contains(import.Id))
+                    : imports.FirstOrDefault(import => import.Id == previous.Id);
+                UpdateAdditionalComparisonKeys(row);
+            }
         }
         finally
         {
             _updatingComparisonFiles = false;
+        }
+        FilterComparisonFileChoices();
+    }
+
+    private void AddCompareFile_Click(object sender, RoutedEventArgs e)
+    {
+        int number = _additionalCompareFiles.Count + 3;
+        Grid grid = new() { Margin = new Thickness(0, 2, 0, 4) };
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(180) });
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+
+        TextBlock fileLabel = new() { Text = $"Plik {number}", VerticalAlignment = VerticalAlignment.Center };
+        ComboBox fileCombo = new()
+        {
+            Height = 30,
+            Margin = new Thickness(10, 0, 10, 0),
+            HorizontalContentAlignment = HorizontalAlignment.Stretch,
+            ItemTemplate = (DataTemplate)FindResource("CompareFileTemplate")
+        };
+        TextBlock keysLabel = new() { Text = $"Klucze pliku {number}", VerticalAlignment = VerticalAlignment.Center };
+        ComboBox keysCombo = new()
+        {
+            Height = 30,
+            Margin = new Thickness(8, 0, 6, 0),
+            IsEditable = true,
+            ToolTip = "Wybierz jedną kolumnę lub wpisz kilka nazw oddzielonych przecinkami"
+        };
+        Button removeButton = new() { Content = "Usuń", MinWidth = 56, Padding = new Thickness(7, 4, 7, 4) };
+
+        Grid.SetColumn(fileCombo, 1);
+        Grid.SetColumn(keysLabel, 2);
+        Grid.SetColumn(keysCombo, 3);
+        Grid.SetColumn(removeButton, 4);
+        grid.Children.Add(fileLabel);
+        grid.Children.Add(fileCombo);
+        grid.Children.Add(keysLabel);
+        grid.Children.Add(keysCombo);
+        grid.Children.Add(removeButton);
+
+        AdditionalCompareFileRow row = new(grid, fileCombo, keysCombo);
+        _additionalCompareFiles.Add(row);
+        AdditionalCompareFilesPanel.Children.Add(grid);
+        fileCombo.SelectionChanged += (_, _) =>
+        {
+            UpdateAdditionalComparisonKeys(row);
+            FilterComparisonFileChoices();
+        };
+        removeButton.Click += (_, _) =>
+        {
+            _additionalCompareFiles.Remove(row);
+            AdditionalCompareFilesPanel.Children.Remove(grid);
+            RenumberAdditionalCompareRows();
+            FilterComparisonFileChoices();
+        };
+
+        CsvImport[] imports = (ImportsListBox.ItemsSource as IEnumerable<CsvImport> ?? []).ToArray();
+        fileCombo.ItemsSource = imports;
+        HashSet<Guid> selected = SelectedComparisonImportIds(row);
+        fileCombo.SelectedItem = imports.FirstOrDefault(import => !selected.Contains(import.Id));
+        UpdateAdditionalComparisonKeys(row);
+        FilterComparisonFileChoices();
+    }
+
+    private void FilterComparisonFileChoices()
+    {
+        if (_updatingComparisonFiles)
+        {
+            return;
+        }
+
+        ComboBox[] comboBoxes =
+        [
+            CompareLeftTableComboBox,
+            CompareTableComboBox,
+            .. _additionalCompareFiles.Select(row => row.FileComboBox)
+        ];
+        CsvImport[] imports = (ImportsListBox.ItemsSource as IEnumerable<CsvImport> ?? []).ToArray();
+        Guid?[] selections = comboBoxes
+            .Select(comboBox => (comboBox.SelectedItem as CsvImport)?.Id)
+            .ToArray();
+
+        _updatingComparisonFiles = true;
+        try
+        {
+            for (int index = 0; index < comboBoxes.Length; index++)
+            {
+                Guid? ownSelection = selections[index];
+                HashSet<Guid> selectedElsewhere = selections
+                    .Where((selection, selectionIndex) => selectionIndex != index && selection.HasValue)
+                    .Select(selection => selection!.Value)
+                    .ToHashSet();
+                CsvImport[] available = imports
+                    .Where(import => !selectedElsewhere.Contains(import.Id))
+                    .ToArray();
+                comboBoxes[index].ItemsSource = available;
+                comboBoxes[index].SelectedItem = ownSelection.HasValue
+                    ? available.FirstOrDefault(import => import.Id == ownSelection.Value)
+                    : null;
+            }
+        }
+        finally
+        {
+            _updatingComparisonFiles = false;
+        }
+    }
+
+    private HashSet<Guid> SelectedComparisonImportIds(AdditionalCompareFileRow? excluded = null)
+    {
+        HashSet<Guid> selected = [];
+        if (CompareLeftTableComboBox.SelectedItem is CsvImport left)
+        {
+            selected.Add(left.Id);
+        }
+        if (CompareTableComboBox.SelectedItem is CsvImport right)
+        {
+            selected.Add(right.Id);
+        }
+        foreach (AdditionalCompareFileRow row in _additionalCompareFiles.Where(row => row != excluded))
+        {
+            if (row.FileComboBox.SelectedItem is CsvImport import)
+            {
+                selected.Add(import.Id);
+            }
+        }
+        return selected;
+    }
+
+    private static void UpdateAdditionalComparisonKeys(AdditionalCompareFileRow row)
+    {
+        if (row.FileComboBox.SelectedItem is not CsvImport import)
+        {
+            row.KeysComboBox.ItemsSource = null;
+            row.KeysComboBox.Text = string.Empty;
+            return;
+        }
+        string[] columns = import.Columns.Select(column => column.Name).ToArray();
+        row.KeysComboBox.ItemsSource = columns;
+        IReadOnlyList<string> previous = ParseColumns(row.KeysComboBox.Text);
+        row.KeysComboBox.Text = previous.Count > 0 && previous.All(key => columns.Contains(key, StringComparer.OrdinalIgnoreCase))
+            ? string.Join(",", previous)
+            : columns.FirstOrDefault() ?? string.Empty;
+    }
+
+    private void RenumberAdditionalCompareRows()
+    {
+        for (int index = 0; index < _additionalCompareFiles.Count; index++)
+        {
+            Grid grid = _additionalCompareFiles[index].Container;
+            ((TextBlock)grid.Children[0]).Text = $"Plik {index + 3}";
+            ((TextBlock)grid.Children[2]).Text = $"Klucze pliku {index + 3}";
         }
     }
 
@@ -716,6 +966,7 @@ public partial class MainWindow : Window
         if (!_updatingComparisonFiles && CompareLeftTableComboBox.SelectedItem is CsvImport leftImport)
         {
             ImportsListBox.SelectedItem = ImportsListBox.Items.Cast<CsvImport>().FirstOrDefault(import => import.Id == leftImport.Id);
+            FilterComparisonFileChoices();
         }
     }
 
@@ -778,6 +1029,11 @@ public partial class MainWindow : Window
             {
                 Header = column,
                 SortMemberPath = column,
+                SortDirection = string.Equals(_sortColumn, column, StringComparison.OrdinalIgnoreCase)
+                    ? _sortDescending
+                        ? ListSortDirection.Descending
+                        : ListSortDirection.Ascending
+                    : null,
                 Binding = new Binding($"[{column}]") { Mode = BindingMode.OneWay },
                 Width = DataGridLength.Auto,
                 MinWidth = 100,
@@ -1010,6 +1266,7 @@ public partial class MainWindow : Window
     private void CompareTableComboBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
     {
         UpdateRightComparisonKeys();
+        FilterComparisonFileChoices();
     }
 
     private void CompareLeftKeyColumnsComboBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
@@ -1252,4 +1509,9 @@ public partial class MainWindow : Window
     {
         SelectWorkspace(_currentWorkspacePath ?? _startupWorkspacePath);
     }
+
+    private sealed record AdditionalCompareFileRow(
+        Grid Container,
+        ComboBox FileComboBox,
+        ComboBox KeysComboBox);
 }

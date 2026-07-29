@@ -69,18 +69,36 @@ internal sealed class SqliteTableMaterializer(IWorkspaceContext workspaceContext
             rowCount = (long)(await count.ExecuteScalarAsync(cancellationToken) ?? 0L);
         }
 
-        await using (SqliteCommand history = connection.CreateCommand())
+        Guid importId = Guid.NewGuid();
+        await using (SqliteCommand import = connection.CreateCommand())
         {
-            history.Transaction = transaction;
-            history.CommandText = """
-                INSERT INTO _workspace_operations (id, operation_type, result_table_name, created_at, message)
-                VALUES ($id, 'export_table', $table, $createdAt, $message);
+            import.Transaction = transaction;
+            import.CommandText = """
+                INSERT INTO _workspace_imports (id, display_name, source_path, table_name, imported_at, row_count)
+                VALUES ($id, $displayName, $sourcePath, $tableName, $importedAt, $rowCount);
                 """;
-            history.Parameters.AddWithValue("$id", Guid.NewGuid().ToString());
-            history.Parameters.AddWithValue("$table", request.TargetTableName);
-            history.Parameters.AddWithValue("$createdAt", DateTimeOffset.UtcNow.ToString("O"));
-            history.Parameters.AddWithValue("$message", $"Utworzono tabelę '{request.TargetTableName}' ({rowCount} wierszy).");
-            await history.ExecuteNonQueryAsync(cancellationToken);
+            import.Parameters.AddWithValue("$id", importId.ToString());
+            import.Parameters.AddWithValue("$displayName", request.TargetTableName);
+            import.Parameters.AddWithValue("$sourcePath", $"workspace://{request.SourceTableName}");
+            import.Parameters.AddWithValue("$tableName", request.TargetTableName);
+            import.Parameters.AddWithValue("$importedAt", DateTimeOffset.UtcNow.ToString("O"));
+            import.Parameters.AddWithValue("$rowCount", rowCount);
+            await import.ExecuteNonQueryAsync(cancellationToken);
+        }
+
+        for (int index = 0; index < request.Columns.Count; index++)
+        {
+            await using SqliteCommand column = connection.CreateCommand();
+            column.Transaction = transaction;
+            column.CommandText = """
+                INSERT INTO _workspace_columns (import_id, column_index, original_name, name)
+                VALUES ($importId, $columnIndex, $originalName, $name);
+                """;
+            column.Parameters.AddWithValue("$importId", importId.ToString());
+            column.Parameters.AddWithValue("$columnIndex", index);
+            column.Parameters.AddWithValue("$originalName", request.Columns[index]);
+            column.Parameters.AddWithValue("$name", request.Columns[index]);
+            await column.ExecuteNonQueryAsync(cancellationToken);
         }
 
         await transaction.CommitAsync(cancellationToken);

@@ -11,6 +11,11 @@ public sealed record OperationResult(
         return new OperationResult(true, resultTableName, message, sql);
     }
 
+    public static OperationResult OkQuery(string sql, string message)
+    {
+        return new OperationResult(true, null, message, sql);
+    }
+
     public static OperationResult Failed(string message)
     {
         return new OperationResult(false, null, message);

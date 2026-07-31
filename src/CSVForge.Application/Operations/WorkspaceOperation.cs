@@ -5,7 +5,8 @@ public sealed record WorkspaceOperation(
     string OperationType,
     string? ResultTableName,
     DateTimeOffset CreatedAt,
-    string Message)
+    string Message,
+    string? SourceSql = null)
 {
     public string DisplayName => $"{CreatedAt:HH:mm} {OperationType}: {Message}";
 }

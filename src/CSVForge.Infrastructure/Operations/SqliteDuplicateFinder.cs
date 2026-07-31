@@ -26,27 +26,22 @@ internal sealed class SqliteDuplicateFinder(IWorkspaceContext workspaceContext) 
         await connection.OpenAsync(cancellationToken);
         await SqliteIndexHelper.EnsureAsync(connection, request.TableName, request.KeyColumns, cancellationToken);
 
-        string resultTableName = $"_duplicates_{DateTimeOffset.UtcNow:yyyyMMddHHmmssfff}";
         string keyColumnsSql = string.Join(", ", request.KeyColumns.Select(CsvImportNameHelper.QuoteIdentifier));
         string emptyFilter = BuildEmptyFilter(request);
 
-        await using SqliteCommand command = connection.CreateCommand();
         string sql = request.Mode == DuplicateSearchMode.Summary
-            ? BuildSummarySql(request.TableName, resultTableName, keyColumnsSql, emptyFilter)
-            : BuildRowsSql(request.TableName, resultTableName, keyColumnsSql, emptyFilter);
-        command.CommandText = sql;
-        await command.ExecuteNonQueryAsync(cancellationToken);
+            ? BuildSummarySql(request.TableName, keyColumnsSql, emptyFilter)
+            : BuildRowsSql(request.TableName, keyColumnsSql, emptyFilter);
 
-        long duplicateCount = await CountRowsAsync(connection, resultTableName, cancellationToken);
-        await SaveOperationAsync(connection, "duplicates", resultTableName, $"Found {duplicateCount} duplicate result rows.", cancellationToken);
+        long duplicateCount = await CountRowsAsync(connection, sql, cancellationToken);
+        await SaveOperationAsync(connection, "duplicates", sql, $"Found {duplicateCount} duplicate result rows.", cancellationToken);
 
-        return OperationResult.Ok(resultTableName, $"Znaleziono {duplicateCount} wierszy wyniku duplikatów.", sql);
+        return OperationResult.OkQuery(sql, $"Znaleziono {duplicateCount} wierszy wyniku duplikatów.");
     }
 
-    private static string BuildSummarySql(string tableName, string resultTableName, string keyColumnsSql, string emptyFilter)
+    private static string BuildSummarySql(string tableName, string keyColumnsSql, string emptyFilter)
     {
         return $"""
-            CREATE TABLE {CsvImportNameHelper.QuoteIdentifier(resultTableName)} AS
             SELECT {keyColumnsSql}, COUNT(*) AS duplicate_count
             FROM {CsvImportNameHelper.QuoteIdentifier(tableName)}
             {emptyFilter}
@@ -55,11 +50,10 @@ internal sealed class SqliteDuplicateFinder(IWorkspaceContext workspaceContext) 
             """;
     }
 
-    private static string BuildRowsSql(string tableName, string resultTableName, string keyColumnsSql, string emptyFilter)
+    private static string BuildRowsSql(string tableName, string keyColumnsSql, string emptyFilter)
     {
         string sourceTable = CsvImportNameHelper.QuoteIdentifier(tableName);
         return $"""
-            CREATE TABLE {CsvImportNameHelper.QuoteIdentifier(resultTableName)} AS
             SELECT source.*
             FROM {sourceTable} AS source
             INNER JOIN (
@@ -91,25 +85,25 @@ internal sealed class SqliteDuplicateFinder(IWorkspaceContext workspaceContext) 
         return $"WHERE {predicate}";
     }
 
-    private static async Task<long> CountRowsAsync(SqliteConnection connection, string tableName, CancellationToken cancellationToken)
+    private static async Task<long> CountRowsAsync(SqliteConnection connection, string sql, CancellationToken cancellationToken)
     {
         await using SqliteCommand command = connection.CreateCommand();
-        command.CommandText = $"SELECT COUNT(*) FROM {CsvImportNameHelper.QuoteIdentifier(tableName)};";
+        command.CommandText = $"SELECT COUNT(*) FROM ({sql.Trim().TrimEnd(';')}) AS _result;";
         return (long)(await command.ExecuteScalarAsync(cancellationToken) ?? 0L);
     }
 
-    private static async Task SaveOperationAsync(SqliteConnection connection, string operationType, string resultTableName, string message, CancellationToken cancellationToken)
+    private static async Task SaveOperationAsync(SqliteConnection connection, string operationType, string sql, string message, CancellationToken cancellationToken)
     {
         await using SqliteCommand command = connection.CreateCommand();
         command.CommandText = """
-            INSERT INTO _workspace_operations (id, operation_type, result_table_name, created_at, message)
-            VALUES ($id, $operationType, $resultTableName, $createdAt, $message);
+            INSERT INTO _workspace_operations (id, operation_type, result_table_name, created_at, message, source_sql)
+            VALUES ($id, $operationType, NULL, $createdAt, $message, $sourceSql);
             """;
         command.Parameters.AddWithValue("$id", Guid.NewGuid().ToString());
         command.Parameters.AddWithValue("$operationType", operationType);
-        command.Parameters.AddWithValue("$resultTableName", resultTableName);
         command.Parameters.AddWithValue("$createdAt", DateTimeOffset.UtcNow.ToString("O"));
         command.Parameters.AddWithValue("$message", message);
+        command.Parameters.AddWithValue("$sourceSql", sql);
         await command.ExecuteNonQueryAsync(cancellationToken);
     }
 }

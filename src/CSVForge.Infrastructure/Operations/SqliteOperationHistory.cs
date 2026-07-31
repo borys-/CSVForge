@@ -18,7 +18,7 @@ internal sealed class SqliteOperationHistory(IWorkspaceContext workspaceContext)
         await connection.OpenAsync(cancellationToken);
         await using SqliteCommand command = connection.CreateCommand();
         command.CommandText = """
-            SELECT id, operation_type, result_table_name, created_at, message
+            SELECT id, operation_type, result_table_name, created_at, message, source_sql
             FROM _workspace_operations
             ORDER BY created_at DESC
             LIMIT 100;
@@ -33,7 +33,8 @@ internal sealed class SqliteOperationHistory(IWorkspaceContext workspaceContext)
                 reader.GetString(1),
                 reader.IsDBNull(2) ? null : reader.GetString(2),
                 DateTimeOffset.Parse(reader.GetString(3)),
-                reader.GetString(4)));
+                reader.GetString(4),
+                reader.IsDBNull(5) ? null : reader.GetString(5)));
         }
         return operations;
     }

@@ -437,6 +437,7 @@ public partial class MainWindow : Window
         _selectedImport = ImportsListBox.SelectedItem as CsvImport;
         WorkspaceModeTabControl.SelectedItem = BrowseTab;
         _adHocTableName = null;
+        _sqlResultQuery = null;
         _pageOffset = 0;
         _sortColumn = null;
         _sortDescending = false;
@@ -714,10 +715,7 @@ public partial class MainWindow : Window
                 SelectedEnum(DuplicateModeComboBox, DuplicateSearchMode.AllDuplicateRows),
                 IgnoreEmptyKeysCheckBox.IsChecked == true));
 
-            ShowGeneratedSql(result);
-            _adHocTableName = result.ResultTableName;
-            _pageOffset = 0;
-            await RefreshSelectedTableAsync();
+            await ShowOperationResultAsync(result, "Wynik duplikatów");
             await RefreshOperationsAsync();
         }, "Duplikaty gotowe");
     }
@@ -771,12 +769,9 @@ public partial class MainWindow : Window
                 sources,
                 SelectedEnum(CompareModeComboBox, DatasetCompareMode.AllWithStatus)));
 
-            ShowGeneratedSql(result);
-            _adHocTableName = result.ResultTableName;
-            _pageOffset = 0;
             _sortColumn = leftKeys[0];
             _sortDescending = false;
-            await RefreshSelectedTableAsync();
+            await ShowOperationResultAsync(result, "Wynik porównania");
             await RefreshOperationsAsync();
         }, "Porównanie gotowe");
     }
@@ -819,10 +814,7 @@ public partial class MainWindow : Window
                 ParseColumns(RightOutputColumnsTextBox.Text),
                 SelectedEnum(JoinTypeComboBox, DatasetJoinType.Left)));
 
-            ShowGeneratedSql(result);
-            _adHocTableName = result.ResultTableName;
-            _pageOffset = 0;
-            await RefreshSelectedTableAsync();
+            await ShowOperationResultAsync(result, "Wynik połączenia");
             await RefreshOperationsAsync();
         }, "Połączenie gotowe");
     }
@@ -924,12 +916,26 @@ public partial class MainWindow : Window
 
     private async void OperationsListBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
     {
-        if (OperationsListBox.SelectedItem is not WorkspaceOperation { ResultTableName: not null } operation)
+        if (OperationsListBox.SelectedItem is not WorkspaceOperation operation)
+        {
+            return;
+        }
+
+        if (!string.IsNullOrWhiteSpace(operation.SourceSql))
+        {
+            OperationResult result = OperationResult.OkQuery(operation.SourceSql, operation.Message);
+            await RunUiActionAsync(
+                () => ShowOperationResultAsync(result, "Wynik operacji"),
+                "Wynik operacji gotowy");
+            return;
+        }
+        if (operation.ResultTableName is null)
         {
             return;
         }
 
         _adHocTableName = operation.ResultTableName;
+        _sqlResultQuery = null;
         _pageOffset = 0;
         await RefreshSelectedTableAsync();
     }
@@ -951,6 +957,11 @@ public partial class MainWindow : Window
             if (string.Equals(_adHocTableName, operation.ResultTableName, StringComparison.OrdinalIgnoreCase))
             {
                 _adHocTableName = null;
+                DataGrid.ItemsSource = null;
+            }
+            if (string.Equals(_sqlResultQuery, operation.SourceSql, StringComparison.Ordinal))
+            {
+                _sqlResultQuery = null;
                 DataGrid.ItemsSource = null;
             }
             await RefreshOperationsAsync();
@@ -1432,7 +1443,36 @@ public partial class MainWindow : Window
         }
 
         SqlQueryTextBox.Text = result.Sql;
-        SqlStatusText.Text = "SQL ostatniej operacji — przed ponownym wykonaniem zmień nazwę tabeli wynikowej";
+        SqlStatusText.Text = "SQL ostatniej operacji";
+    }
+
+    private async Task ShowOperationResultAsync(OperationResult operation, string title)
+    {
+        if (string.IsNullOrWhiteSpace(operation.Sql))
+        {
+            throw new InvalidOperationException("Operacja nie zwróciła zapytania SQL.");
+        }
+
+        ShowGeneratedSql(operation);
+        SqlQueryResult result = await _executeSql.ExecuteAsync(operation.Sql);
+        ShowRows(
+            result.Columns,
+            result.Rows.Select(row => row.ToDictionary(
+                item => item.Key,
+                item => item.Value,
+                StringComparer.OrdinalIgnoreCase)),
+            allowSorting: false);
+        _adHocTableName = null;
+        _sqlResultQuery = operation.Sql;
+        _columnFilters.Clear();
+        _pageOffset = 0;
+        _totalRows = result.Rows.Count;
+        PreviousPageButton.IsEnabled = false;
+        NextPageButton.IsEnabled = false;
+        ExportResultButton.Visibility = Visibility.Visible;
+        string suffix = result.WasTruncated ? " — pokazano pierwsze 10 000" : string.Empty;
+        TableTitleText.Text = $"{title} ({result.Rows.Count:N0} wierszy{suffix})";
+        PageStatusText.Text = $"{result.Rows.Count:N0} wierszy{suffix}";
     }
 
     private async void SqlEditor_PreviewKeyDown(object sender, KeyEventArgs e)

@@ -20,8 +20,7 @@ public sealed class SqliteDatasetJoinerTests
         OperationResult result = await provider.GetRequiredService<IJoinDatasetsUseCase>().ExecuteAsync(new DatasetJoinRequest(
             left.Import.TableName, right.Import.TableName, ["Id"], ["Id"], ["Id", "Name"], ["Id", "City"], joinType));
 
-        TablePage page = await provider.GetRequiredService<IBrowseTableUseCase>()
-            .ExecuteAsync(new BrowseTableRequest(result.ResultTableName!, 10, 0, null, false, null));
+        var page = await provider.GetRequiredService<IExecuteSqlUseCase>().ExecuteAsync(result.Sql!);
 
         Assert.Equal(expectedRows, page.Rows.Count);
         Assert.Contains("right_Id", page.Columns);

@@ -21,8 +21,7 @@ public sealed class SqliteDuplicateFinderTests
 
         Assert.True(result.Success);
 
-        TablePage page = await provider.GetRequiredService<IBrowseTableUseCase>()
-            .ExecuteAsync(new BrowseTableRequest(result.ResultTableName!, 10, 0, null, false, null));
+        var page = await provider.GetRequiredService<IExecuteSqlUseCase>().ExecuteAsync(result.Sql!);
 
         Assert.Single(page.Rows);
         Assert.Equal("a@example.com", page.Rows[0]["Email"]);
@@ -38,8 +37,7 @@ public sealed class SqliteDuplicateFinderTests
         OperationResult result = await provider.GetRequiredService<IFindDuplicatesUseCase>()
             .ExecuteAsync(new DuplicateSearchRequest(import.TableName, ["Email"], DuplicateSearchMode.AllDuplicateRows, true));
 
-        TablePage page = await provider.GetRequiredService<IBrowseTableUseCase>()
-            .ExecuteAsync(new BrowseTableRequest(result.ResultTableName!, 10, 0, "Name", false, null));
+        var page = await provider.GetRequiredService<IExecuteSqlUseCase>().ExecuteAsync(result.Sql!);
 
         Assert.Equal(2, page.Rows.Count);
         Assert.Equal("Ada", page.Rows[0]["Name"]);
@@ -58,8 +56,7 @@ public sealed class SqliteDuplicateFinderTests
         OperationResult result = await provider.GetRequiredService<IFindDuplicatesUseCase>()
             .ExecuteAsync(new DuplicateSearchRequest(import.TableName, ["Email"], DuplicateSearchMode.Summary, ignoreEmptyValues));
 
-        TablePage page = await provider.GetRequiredService<IBrowseTableUseCase>()
-            .ExecuteAsync(new BrowseTableRequest(result.ResultTableName!, 10, 0, null, false, null));
+        var page = await provider.GetRequiredService<IExecuteSqlUseCase>().ExecuteAsync(result.Sql!);
 
         Assert.Equal(expectedRows, page.Rows.Count);
         if (!ignoreEmptyValues)

@@ -27,15 +27,10 @@ internal sealed class SqliteDatasetJoiner(IWorkspaceContext workspaceContext) : 
         await SqliteIndexHelper.EnsureAsync(connection, request.LeftTableName, request.LeftJoinColumns, cancellationToken);
         await SqliteIndexHelper.EnsureAsync(connection, request.RightTableName, request.RightJoinColumns, cancellationToken);
 
-        string resultTableName = $"_join_{DateTimeOffset.UtcNow:yyyyMMddHHmmssfff}";
-        await using SqliteCommand command = connection.CreateCommand();
-        string sql = BuildSql(request, resultTableName);
-        command.CommandText = sql;
-        await command.ExecuteNonQueryAsync(cancellationToken);
-
-        long rowCount = await CountRowsAsync(connection, resultTableName, cancellationToken);
-        await SaveOperationAsync(connection, resultTableName, request.JoinType, rowCount, cancellationToken);
-        return OperationResult.Ok(resultTableName, $"Połączenie zwróciło {rowCount} wierszy.", sql);
+        string sql = BuildSql(request);
+        long rowCount = await CountRowsAsync(connection, sql, cancellationToken);
+        await SaveOperationAsync(connection, sql, request.JoinType, rowCount, cancellationToken);
+        return OperationResult.OkQuery(sql, $"Połączenie zwróciło {rowCount} wierszy.");
     }
 
     private static void Validate(DatasetJoinRequest request)
@@ -51,11 +46,10 @@ internal sealed class SqliteDatasetJoiner(IWorkspaceContext workspaceContext) : 
         }
     }
 
-    private static string BuildSql(DatasetJoinRequest request, string resultTableName)
+    private static string BuildSql(DatasetJoinRequest request)
     {
         string left = CsvImportNameHelper.QuoteIdentifier(request.LeftTableName);
         string right = CsvImportNameHelper.QuoteIdentifier(request.RightTableName);
-        string result = CsvImportNameHelper.QuoteIdentifier(resultTableName);
         string projection = BuildProjection(request);
         string predicate = string.Join(" AND ", request.LeftJoinColumns.Zip(request.RightJoinColumns, (leftColumn, rightColumn) =>
             $"l.{CsvImportNameHelper.QuoteIdentifier(leftColumn)} = r.{CsvImportNameHelper.QuoteIdentifier(rightColumn)}"));
@@ -68,7 +62,7 @@ internal sealed class SqliteDatasetJoiner(IWorkspaceContext workspaceContext) : 
             _ => throw new ArgumentOutOfRangeException(nameof(request), request.JoinType, "Unsupported join type.")
         };
 
-        return $"CREATE TABLE {result} AS SELECT {projection} FROM {fromClause};";
+        return $"SELECT {projection} FROM {fromClause};";
     }
 
     private static string BuildProjection(DatasetJoinRequest request)
@@ -99,24 +93,26 @@ internal sealed class SqliteDatasetJoiner(IWorkspaceContext workspaceContext) : 
         }
     }
 
-    private static async Task<long> CountRowsAsync(SqliteConnection connection, string tableName, CancellationToken cancellationToken)
+    private static async Task<long> CountRowsAsync(SqliteConnection connection, string sql, CancellationToken cancellationToken)
     {
         await using SqliteCommand command = connection.CreateCommand();
-        command.CommandText = $"SELECT COUNT(*) FROM {CsvImportNameHelper.QuoteIdentifier(tableName)};";
+        command.CommandText = $"SELECT COUNT(*) FROM ({NormalizeSql(sql)}) AS _result;";
         return (long)(await command.ExecuteScalarAsync(cancellationToken) ?? 0L);
     }
 
-    private static async Task SaveOperationAsync(SqliteConnection connection, string resultTableName, DatasetJoinType joinType, long rowCount, CancellationToken cancellationToken)
+    private static async Task SaveOperationAsync(SqliteConnection connection, string sql, DatasetJoinType joinType, long rowCount, CancellationToken cancellationToken)
     {
         await using SqliteCommand command = connection.CreateCommand();
         command.CommandText = """
-            INSERT INTO _workspace_operations (id, operation_type, result_table_name, created_at, message)
-            VALUES ($id, 'join', $resultTableName, $createdAt, $message);
+            INSERT INTO _workspace_operations (id, operation_type, result_table_name, created_at, message, source_sql)
+            VALUES ($id, 'join', NULL, $createdAt, $message, $sourceSql);
             """;
         command.Parameters.AddWithValue("$id", Guid.NewGuid().ToString());
-        command.Parameters.AddWithValue("$resultTableName", resultTableName);
         command.Parameters.AddWithValue("$createdAt", DateTimeOffset.UtcNow.ToString("O"));
         command.Parameters.AddWithValue("$message", $"{joinType} join produced {rowCount} rows.");
+        command.Parameters.AddWithValue("$sourceSql", sql);
         await command.ExecuteNonQueryAsync(cancellationToken);
     }
+
+    private static string NormalizeSql(string sql) => sql.Trim().TrimEnd(';');
 }

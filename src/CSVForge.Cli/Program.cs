@@ -202,7 +202,18 @@ public static class CliApplication
         imports.FirstOrDefault(item => string.Equals(item.TableName, tableName, StringComparison.OrdinalIgnoreCase))?.Columns.Select(column => column.Name).ToArray()
         ?? throw new ArgumentException($"Tabela '{tableName}' nie jest zarejestrowanym importem; podaj kolumny wynikowe jawnie.");
 
-    static void PrintOperation(OperationResult result) => Console.WriteLine($"{result.Message} Tabela wynikowa: {result.ResultTableName}");
+    static void PrintOperation(OperationResult result)
+    {
+        Console.WriteLine(result.Message);
+        if (!string.IsNullOrWhiteSpace(result.Sql))
+        {
+            Console.WriteLine(result.Sql);
+        }
+        else if (!string.IsNullOrWhiteSpace(result.ResultTableName))
+        {
+            Console.WriteLine($"Tabela wynikowa: {result.ResultTableName}");
+        }
+    }
 
     static void PrintHelp()
     {

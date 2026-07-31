@@ -40,8 +40,7 @@ public sealed class SqliteDatasetComparerTests
                 ["Email"],
                 DatasetCompareMode.AllWithStatus));
 
-        TablePage page = await provider.GetRequiredService<IBrowseTableUseCase>()
-            .ExecuteAsync(new BrowseTableRequest(result.ResultTableName!, 10, 0, "Email", false, null));
+        var page = await provider.GetRequiredService<IExecuteSqlUseCase>().ExecuteAsync(result.Sql!);
 
         Assert.Equal(3, page.Rows.Count);
         Assert.Contains(page.Rows, row => row["Email"] == "a@example.com" && row["status_porównania"] == "We wszystkich plikach");
@@ -82,8 +81,7 @@ public sealed class SqliteDatasetComparerTests
                 ["Id"],
                 ["Id"],
                 DatasetCompareMode.DifferentRows));
-        TablePage page = await provider.GetRequiredService<IBrowseTableUseCase>()
-            .ExecuteAsync(new BrowseTableRequest(result.ResultTableName!, 10, 0, "Id", false, null));
+        var page = await provider.GetRequiredService<IExecuteSqlUseCase>().ExecuteAsync(result.Sql!);
 
         Assert.Equal(2, page.Rows.Count);
         Assert.Contains(page.Rows, row => row["Id"] == "2" && row["status_porównania"] == "Tylko w: plik 1");
@@ -118,8 +116,7 @@ public sealed class SqliteDatasetComparerTests
                 new(imports[1].Import.TableName, "Raport 2", ["Id"]),
                 new(imports[2].Import.TableName, "Raport 3", ["Id"])
             ], DatasetCompareMode.AllWithStatus));
-        TablePage page = await provider.GetRequiredService<IBrowseTableUseCase>()
-            .ExecuteAsync(new BrowseTableRequest(result.ResultTableName!, 20, 0, "Id", false, null));
+        var page = await provider.GetRequiredService<IExecuteSqlUseCase>().ExecuteAsync(result.Sql!);
 
         Assert.Contains(page.Rows, row => row["Id"] == "1" && row["status_porównania"] == "Tylko w: plik 1");
         Assert.Contains(page.Rows, row => row["Id"] == "2" && row["status_porównania"] == "We wszystkich plikach");

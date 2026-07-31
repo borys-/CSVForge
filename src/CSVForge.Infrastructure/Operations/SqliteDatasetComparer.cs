@@ -27,18 +27,13 @@ internal sealed class SqliteDatasetComparer(IWorkspaceContext workspaceContext) 
             await SqliteIndexHelper.EnsureAsync(connection, source.TableName, source.KeyColumns, cancellationToken);
         }
 
-        string resultTableName = $"_compare_{DateTimeOffset.UtcNow:yyyyMMddHHmmssfff}";
-        await using SqliteCommand command = connection.CreateCommand();
-        string sql = BuildSql(request, resultTableName);
-        command.CommandText = sql;
-        await command.ExecuteNonQueryAsync(cancellationToken);
-
-        IReadOnlyDictionary<string, long> counts = await CountStatusesAsync(connection, resultTableName, cancellationToken);
+        string sql = BuildSql(request);
+        IReadOnlyDictionary<string, long> counts = await CountStatusesAsync(connection, sql, cancellationToken);
         long rowCount = counts.Values.Sum();
         string details = string.Join(", ", counts.OrderBy(item => item.Key).Select(item => $"{item.Key}: {item.Value}"));
         string message = $"Porównanie {request.Sources.Count} plików zwróciło {rowCount} wierszy ({details}).";
-        await SaveOperationAsync(connection, resultTableName, message, cancellationToken);
-        return OperationResult.Ok(resultTableName, message, sql);
+        await SaveOperationAsync(connection, sql, message, cancellationToken);
+        return OperationResult.OkQuery(sql, message);
     }
 
     private static void Validate(DatasetCompareRequest request)
@@ -58,7 +53,7 @@ internal sealed class SqliteDatasetComparer(IWorkspaceContext workspaceContext) 
         }
     }
 
-    private static string BuildSql(DatasetCompareRequest request, string resultTableName)
+    private static string BuildSql(DatasetCompareRequest request)
     {
         IReadOnlyList<string> outputColumns = request.Sources[0].KeyColumns;
         string union = string.Join("\nUNION\n", request.Sources.Select(source =>
@@ -83,7 +78,6 @@ internal sealed class SqliteDatasetComparer(IWorkspaceContext workspaceContext) 
         };
 
         return $"""
-            CREATE TABLE {Quote(resultTableName)} AS
             WITH all_keys AS (
                 {union}
             )
@@ -113,11 +107,15 @@ internal sealed class SqliteDatasetComparer(IWorkspaceContext workspaceContext) 
 
     private static async Task<IReadOnlyDictionary<string, long>> CountStatusesAsync(
         SqliteConnection connection,
-        string tableName,
+        string sql,
         CancellationToken cancellationToken)
     {
         await using SqliteCommand command = connection.CreateCommand();
-        command.CommandText = $"SELECT {Quote(StatusColumn)}, COUNT(*) FROM {Quote(tableName)} GROUP BY {Quote(StatusColumn)};";
+        command.CommandText = $"""
+            SELECT {Quote(StatusColumn)}, COUNT(*)
+            FROM ({sql.Trim().TrimEnd(';')}) AS _result
+            GROUP BY {Quote(StatusColumn)};
+            """;
         Dictionary<string, long> counts = new(StringComparer.OrdinalIgnoreCase);
         await using SqliteDataReader reader = await command.ExecuteReaderAsync(cancellationToken);
         while (await reader.ReadAsync(cancellationToken))
@@ -129,19 +127,19 @@ internal sealed class SqliteDatasetComparer(IWorkspaceContext workspaceContext) 
 
     private static async Task SaveOperationAsync(
         SqliteConnection connection,
-        string resultTableName,
+        string sql,
         string message,
         CancellationToken cancellationToken)
     {
         await using SqliteCommand command = connection.CreateCommand();
         command.CommandText = """
-            INSERT INTO _workspace_operations (id, operation_type, result_table_name, created_at, message)
-            VALUES ($id, 'compare', $resultTableName, $createdAt, $message);
+            INSERT INTO _workspace_operations (id, operation_type, result_table_name, created_at, message, source_sql)
+            VALUES ($id, 'compare', NULL, $createdAt, $message, $sourceSql);
             """;
         command.Parameters.AddWithValue("$id", Guid.NewGuid().ToString());
-        command.Parameters.AddWithValue("$resultTableName", resultTableName);
         command.Parameters.AddWithValue("$createdAt", DateTimeOffset.UtcNow.ToString("O"));
         command.Parameters.AddWithValue("$message", message);
+        command.Parameters.AddWithValue("$sourceSql", sql);
         await command.ExecuteNonQueryAsync(cancellationToken);
     }
 }

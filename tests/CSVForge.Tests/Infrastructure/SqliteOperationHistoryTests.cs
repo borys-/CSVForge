@@ -5,6 +5,7 @@ using CSVForge.Application.Tables;
 using CSVForge.Domain.Imports;
 using CSVForge.Domain.Operations;
 using CSVForge.Infrastructure;
+using Microsoft.Data.Sqlite;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace CSVForge.Tests.Infrastructure;
@@ -26,10 +27,23 @@ public sealed class SqliteOperationHistoryTests
         OperationResult result = await provider.GetRequiredService<IFindDuplicatesUseCase>()
             .ExecuteAsync(new DuplicateSearchRequest(import.Import.TableName, ["Id"], DuplicateSearchMode.Summary, false));
 
-        Assert.Contains($"CREATE TABLE \"{result.ResultTableName}\"", result.Sql);
+        Assert.Null(result.ResultTableName);
+        Assert.StartsWith("SELECT", result.Sql!.TrimStart(), StringComparison.OrdinalIgnoreCase);
         WorkspaceOperation operation = Assert.Single(await provider.GetRequiredService<IListOperationsUseCase>().ExecuteAsync());
         Assert.Equal("duplicates", operation.OperationType);
-        Assert.Equal(result.ResultTableName, operation.ResultTableName);
+        Assert.Null(operation.ResultTableName);
+        Assert.Equal(result.Sql, operation.SourceSql);
+
+        await using SqliteConnection connection = new($"Data Source={Path.Combine(directory, "workspace.db")}");
+        await connection.OpenAsync();
+        await using SqliteCommand command = connection.CreateCommand();
+        command.CommandText = """
+            SELECT COUNT(*)
+            FROM sqlite_master
+            WHERE type = 'table'
+              AND (name LIKE '_compare_%' OR name LIKE '_join_%' OR name LIKE '_duplicates_%');
+            """;
+        Assert.Equal(0L, (long)(await command.ExecuteScalarAsync() ?? -1L));
     }
 
     [Fact]
@@ -50,7 +64,7 @@ public sealed class SqliteOperationHistoryTests
         await provider.GetRequiredService<IDeleteOperationUseCase>().ExecuteAsync(operation.Id);
 
         Assert.Empty(await provider.GetRequiredService<IListOperationsUseCase>().ExecuteAsync());
-        await Assert.ThrowsAsync<InvalidOperationException>(() => provider.GetRequiredService<IBrowseTableUseCase>()
-            .ExecuteAsync(new BrowseTableRequest(operation.ResultTableName!, 10, 0, null, false, null)));
+        Assert.NotNull(operation.SourceSql);
+        Assert.Single(await provider.GetRequiredService<IListImportedTablesUseCase>().ExecuteAsync());
     }
 }

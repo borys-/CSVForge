@@ -1655,6 +1655,8 @@ public partial class MainWindow : Window
         _sqlResultQuery = operation.Sql;
         _sqlResultPagingEnabled = true;
         _sqlResultTitle = title;
+        _sortColumn = null;
+        _sortDescending = false;
         _pageOffset = 0;
         ExportResultButton.Visibility = Visibility.Visible;
         await RefreshSqlResultPageAsync(refreshTotalRows: true);
@@ -1678,9 +1680,13 @@ public partial class MainWindow : Window
                 : 0;
         }
 
+        string orderBy = string.IsNullOrWhiteSpace(_sortColumn)
+            ? string.Empty
+            : $"ORDER BY {SqlCompletionService.QuoteIdentifier(_sortColumn)} {(_sortDescending ? "DESC" : "ASC")}";
         SqlQueryResult result = await _executeSql.ExecuteAsync($"""
             SELECT *
             FROM ({sourceSql}) AS _result
+            {orderBy}
             LIMIT {PageSize} OFFSET {_pageOffset};
             """);
         ShowRows(
@@ -1689,7 +1695,7 @@ public partial class MainWindow : Window
                 item => item.Key,
                 item => item.Value,
                 StringComparer.OrdinalIgnoreCase)),
-            allowSorting: false,
+            allowSorting: true,
             rowNumberOffset: _pageOffset);
         PreviousPageButton.IsEnabled = _pageOffset > 0;
         NextPageButton.IsEnabled = _pageOffset + result.Rows.Count < _totalRows;

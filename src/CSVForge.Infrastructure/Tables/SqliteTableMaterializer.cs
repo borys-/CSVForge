@@ -45,19 +45,12 @@ internal sealed class SqliteTableMaterializer(IWorkspaceContext workspaceContext
             : $"({NormalizeSql(request.SourceSql)}) AS _sql_result";
         string target = CsvImportNameHelper.QuoteIdentifier(request.TargetTableName);
         string projection = string.Join(", ", request.Columns.Select(CsvImportNameHelper.QuoteIdentifier));
-        string where = string.IsNullOrWhiteSpace(request.TextFilter)
-            ? string.Empty
-            : " WHERE " + string.Join(" OR ", available.Select(column =>
-                $"{CsvImportNameHelper.QuoteIdentifier(column)} LIKE $filter"));
-
         await using (SqliteCommand create = connection.CreateCommand())
         {
             create.Transaction = transaction;
+            string where = SqliteExportFilterBuilder.Build(
+                create, request.TextFilter, available, request.ColumnFilters);
             create.CommandText = $"CREATE TABLE {target} AS SELECT {projection} FROM {source}{where};";
-            if (!string.IsNullOrWhiteSpace(request.TextFilter))
-            {
-                create.Parameters.AddWithValue("$filter", $"%{request.TextFilter}%");
-            }
             await create.ExecuteNonQueryAsync(cancellationToken);
         }
 

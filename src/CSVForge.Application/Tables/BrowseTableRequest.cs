@@ -5,4 +5,5 @@ public sealed record BrowseTableRequest(
     int Limit,
     int Offset,
     string? SortColumn,
-    bool SortDescending);
+    bool SortDescending,
+    IReadOnlyDictionary<string, IReadOnlyList<string?>>? ColumnFilters = null);

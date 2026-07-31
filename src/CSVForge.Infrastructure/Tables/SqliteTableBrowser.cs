@@ -26,10 +26,45 @@ internal sealed class SqliteTableBrowser(IWorkspaceContext workspaceContext) : I
         await connection.OpenAsync(cancellationToken);
 
         IReadOnlyList<string> columns = await ReadColumnNamesAsync(connection, request.TableName, cancellationToken);
-        long totalRows = await CountRowsAsync(connection, request.TableName, cancellationToken);
+        long totalRows = await CountRowsAsync(connection, request, columns, cancellationToken);
         IReadOnlyList<IReadOnlyDictionary<string, string?>> rows = await ReadRowsAsync(connection, request, columns, cancellationToken);
 
         return new TablePage(columns, rows, totalRows, request.Limit, request.Offset);
+    }
+
+    public async Task<IReadOnlyList<ColumnValueOption>> GetColumnValuesAsync(ColumnValuesRequest request, CancellationToken cancellationToken)
+    {
+        if (workspaceContext.CurrentWorkspacePath is null)
+        {
+            throw new InvalidOperationException("Otwórz workspace przed filtrowaniem tabel.");
+        }
+        SqliteIdentifierGuard.Table(request.TableName);
+        SqliteIdentifierGuard.Columns([request.ColumnName]);
+        if (request.Limit <= 0) throw new ArgumentOutOfRangeException(nameof(request));
+
+        await using SqliteConnection connection = SqliteConnectionFactory.Create(workspaceContext.CurrentWorkspacePath);
+        await connection.OpenAsync(cancellationToken);
+        IReadOnlyList<string> columns = await ReadColumnNamesAsync(connection, request.TableName, cancellationToken);
+        if (!columns.Contains(request.ColumnName, StringComparer.OrdinalIgnoreCase))
+        {
+            throw new ArgumentException($"Kolumna '{request.ColumnName}' nie istnieje.", nameof(request));
+        }
+        Dictionary<string, IReadOnlyList<string?>> otherFilters = (request.ColumnFilters ?? new Dictionary<string, IReadOnlyList<string?>>())
+            .Where(filter => !string.Equals(filter.Key, request.ColumnName, StringComparison.OrdinalIgnoreCase))
+            .ToDictionary(filter => filter.Key, filter => filter.Value, StringComparer.OrdinalIgnoreCase);
+        BrowseTableRequest browseRequest = new(request.TableName, request.Limit, 0, null, false, otherFilters);
+        await using SqliteCommand command = connection.CreateCommand();
+        string column = CsvImportNameHelper.QuoteIdentifier(request.ColumnName);
+        command.CommandText = $"SELECT {column}, COUNT(*) FROM {CsvImportNameHelper.QuoteIdentifier(request.TableName)}{BuildWhereClause(browseRequest, columns)} GROUP BY {column} ORDER BY {column} LIMIT $valuesLimit;";
+        AddFilterParameters(command, browseRequest);
+        command.Parameters.AddWithValue("$valuesLimit", request.Limit);
+        List<ColumnValueOption> values = [];
+        await using SqliteDataReader reader = await command.ExecuteReaderAsync(cancellationToken);
+        while (await reader.ReadAsync(cancellationToken))
+        {
+            values.Add(new ColumnValueOption(reader.IsDBNull(0) ? null : Convert.ToString(reader.GetValue(0), CultureInfo.InvariantCulture), reader.GetInt64(1)));
+        }
+        return values;
     }
 
     private static async Task<IReadOnlyList<string>> ReadColumnNamesAsync(SqliteConnection connection, string tableName, CancellationToken cancellationToken)
@@ -52,10 +87,11 @@ internal sealed class SqliteTableBrowser(IWorkspaceContext workspaceContext) : I
         return columns;
     }
 
-    private static async Task<long> CountRowsAsync(SqliteConnection connection, string tableName, CancellationToken cancellationToken)
+    private static async Task<long> CountRowsAsync(SqliteConnection connection, BrowseTableRequest request, IReadOnlyList<string> columns, CancellationToken cancellationToken)
     {
         await using SqliteCommand command = connection.CreateCommand();
-        command.CommandText = $"SELECT COUNT(*) FROM {CsvImportNameHelper.QuoteIdentifier(tableName)};";
+        command.CommandText = $"SELECT COUNT(*) FROM {CsvImportNameHelper.QuoteIdentifier(request.TableName)}{BuildWhereClause(request, columns)};";
+        AddFilterParameters(command, request);
 
         return (long)(await command.ExecuteScalarAsync(cancellationToken) ?? 0L);
     }
@@ -73,9 +109,11 @@ internal sealed class SqliteTableBrowser(IWorkspaceContext workspaceContext) : I
         command.CommandText = $"""
             SELECT {selectColumns}
             FROM {CsvImportNameHelper.QuoteIdentifier(request.TableName)}
+            {BuildWhereClause(request, columns)}
             {orderBy}
             LIMIT $limit OFFSET $offset;
             """;
+        AddFilterParameters(command, request);
         command.Parameters.AddWithValue("$limit", request.Limit);
         command.Parameters.AddWithValue("$offset", Math.Max(0, request.Offset));
 
@@ -97,6 +135,26 @@ internal sealed class SqliteTableBrowser(IWorkspaceContext workspaceContext) : I
         return rows;
     }
 
+    private static string BuildWhereClause(BrowseTableRequest request, IReadOnlyList<string> columns)
+    {
+        List<string> predicates = [];
+        int filterIndex = 0;
+        foreach ((string column, IReadOnlyList<string?> values) in request.ColumnFilters ?? new Dictionary<string, IReadOnlyList<string?>>())
+        {
+            if (!columns.Contains(column, StringComparer.OrdinalIgnoreCase)) throw new ArgumentException($"Filter column '{column}' does not exist.", nameof(request));
+            if (values.Count == 0) { predicates.Add("0 = 1"); filterIndex++; continue; }
+            List<string> valuePredicates = [];
+            int valueIndex = 0;
+            foreach (string? value in values)
+            {
+                valuePredicates.Add(value is null ? $"{CsvImportNameHelper.QuoteIdentifier(column)} IS NULL" : $"{CsvImportNameHelper.QuoteIdentifier(column)} = $columnFilter{filterIndex}_{valueIndex++}");
+            }
+            predicates.Add("(" + string.Join(" OR ", valuePredicates) + ")");
+            filterIndex++;
+        }
+        return predicates.Count == 0 ? string.Empty : " WHERE " + string.Join(" AND ", predicates);
+    }
+
     private static string BuildOrderByClause(BrowseTableRequest request, IReadOnlyList<string> columns)
     {
         if (string.IsNullOrWhiteSpace(request.SortColumn))
@@ -111,6 +169,20 @@ internal sealed class SqliteTableBrowser(IWorkspaceContext workspaceContext) : I
 
         string direction = request.SortDescending ? "DESC" : "ASC";
         return $" ORDER BY {CsvImportNameHelper.QuoteIdentifier(request.SortColumn)} {direction}";
+    }
+
+    private static void AddFilterParameters(SqliteCommand command, BrowseTableRequest request)
+    {
+        int filterIndex = 0;
+        foreach (IReadOnlyList<string?> values in (request.ColumnFilters ?? new Dictionary<string, IReadOnlyList<string?>>()).Values)
+        {
+            int valueIndex = 0;
+            foreach (string? value in values)
+            {
+                if (value is not null) command.Parameters.AddWithValue($"$columnFilter{filterIndex}_{valueIndex++}", value);
+            }
+            filterIndex++;
+        }
     }
 
 }

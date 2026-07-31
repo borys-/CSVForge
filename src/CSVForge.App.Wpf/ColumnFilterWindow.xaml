@@ -1,0 +1,41 @@
+<Window x:Class="CSVForge.App.Wpf.ColumnFilterWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Filtr kolumny" Width="430" Height="600"
+        MinWidth="360" MinHeight="420" WindowStartupLocation="CenterOwner"
+        Background="#F5F7FB">
+    <Grid Margin="16">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+            <RowDefinition Height="Auto" />
+        </Grid.RowDefinitions>
+        <TextBlock x:Name="TitleText" FontSize="19" FontWeight="SemiBold" />
+        <TextBox x:Name="SearchTextBox" Grid.Row="1" Height="32" Margin="0,12,0,10"
+                 VerticalContentAlignment="Center" TextChanged="SearchTextBox_TextChanged"
+                 ToolTip="Wyszukaj wartość" />
+        <StackPanel Grid.Row="2" Orientation="Horizontal" Margin="0,0,0,8">
+            <Button Content="Zaznacz widoczne" Padding="10,5" Click="SelectVisible_Click" />
+            <Button Content="Odznacz widoczne" Padding="10,5" Margin="8,0,0,0" Click="DeselectVisible_Click" />
+        </StackPanel>
+        <Border Grid.Row="3" Background="White" BorderBrush="#D8DEE9" BorderThickness="1"
+                CornerRadius="7" Padding="6">
+            <ScrollViewer VerticalScrollBarVisibility="Auto">
+                <StackPanel x:Name="ValuesPanel" />
+            </ScrollViewer>
+        </Border>
+        <Grid Grid.Row="4" Margin="0,12,0,0">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="Auto" />
+                <ColumnDefinition Width="Auto" />
+            </Grid.ColumnDefinitions>
+            <Button Content="Wyczyść filtr" Padding="10,6" HorizontalAlignment="Left" Click="ClearFilter_Click" />
+            <Button Grid.Column="1" Content="Anuluj" MinWidth="82" Margin="8,0" IsCancel="True" />
+            <Button Grid.Column="2" Content="Zastosuj" MinWidth="92" IsDefault="True"
+                    Background="#2563EB" Foreground="White" Click="Apply_Click" />
+        </Grid>
+    </Grid>
+</Window>

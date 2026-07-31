@@ -52,4 +52,29 @@ public sealed class SqliteTableBrowserTests
         Assert.Equal("Ola", page.Rows[1]["Name"]);
     }
 
+    [Fact]
+    public async Task BrowseTableUseCase_CombinesColumnFiltersAndReturnsDistinctValues()
+    {
+        string directory = Path.Combine(Path.GetTempPath(), "CSVForge.Tests", Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(directory);
+        string workspacePath = Path.Combine(directory, "workspace.db");
+        string csvPath = Path.Combine(directory, "people.csv");
+        await File.WriteAllTextAsync(csvPath, "Name;City;Status\r\nAda;Warszawa;Aktywny\r\nOla;Warszawa;Nieaktywny\r\nZen;Kraków;Aktywny\r\n");
+        ServiceProvider provider = new ServiceCollection().AddApplication().AddInfrastructure().BuildServiceProvider();
+        await provider.GetRequiredService<ICreateWorkspaceUseCase>().ExecuteAsync(workspacePath);
+        ImportResult import = await provider.GetRequiredService<IImportCsvUseCase>().ExecuteAsync(new ImportRequest(csvPath, "People", true, null, null));
+        Dictionary<string, IReadOnlyList<string?>> filters = new(StringComparer.OrdinalIgnoreCase) { ["City"] = ["Warszawa"], ["Status"] = ["Aktywny"] };
+
+        TablePage page = await provider.GetRequiredService<IBrowseTableUseCase>().ExecuteAsync(
+            new BrowseTableRequest(import.Import.TableName, 10, 0, "Name", false, filters));
+        Assert.Equal(1, page.TotalRows);
+        Assert.Equal("Ada", page.Rows[0]["Name"]);
+
+        IReadOnlyList<ColumnValueOption> statusValues = await provider.GetRequiredService<IGetColumnValuesUseCase>().ExecuteAsync(
+            new ColumnValuesRequest(import.Import.TableName, "Status", filters));
+        Assert.Equal(2, statusValues.Count);
+        Assert.Contains(statusValues, option => option.Value == "Aktywny" && option.Count == 1);
+        Assert.Contains(statusValues, option => option.Value == "Nieaktywny" && option.Count == 1);
+    }
+
 }

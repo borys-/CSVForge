@@ -57,6 +57,7 @@ public partial class MainWindow : Window
     private readonly IPreviewCsvUseCase _previewCsv;
     private readonly IListImportedTablesUseCase _listImportedTables;
     private readonly IBrowseTableUseCase _browseTable;
+    private readonly IGetColumnValuesUseCase _getColumnValues;
     private readonly IFindDuplicatesUseCase _findDuplicates;
     private readonly ICompareDatasetsUseCase _compareDatasets;
     private readonly IJoinDatasetsUseCase _joinDatasets;
@@ -98,6 +99,8 @@ public partial class MainWindow : Window
     private string? _lastJoinSql;
     private bool _suppressModeChange;
     private readonly List<AdditionalCompareFileRow> _additionalCompareFiles = [];
+    private readonly Dictionary<string, IReadOnlyList<string?>> _columnFilters = new(StringComparer.OrdinalIgnoreCase);
+    private string? _columnFilterTableName;
 
     public MainWindow(
         ICreateWorkspaceUseCase createWorkspace,
@@ -106,6 +109,7 @@ public partial class MainWindow : Window
         IPreviewCsvUseCase previewCsv,
         IListImportedTablesUseCase listImportedTables,
         IBrowseTableUseCase browseTable,
+        IGetColumnValuesUseCase getColumnValues,
         IFindDuplicatesUseCase findDuplicates,
         ICompareDatasetsUseCase compareDatasets,
         IJoinDatasetsUseCase joinDatasets,
@@ -124,6 +128,7 @@ public partial class MainWindow : Window
         _previewCsv = previewCsv;
         _listImportedTables = listImportedTables;
         _browseTable = browseTable;
+        _getColumnValues = getColumnValues;
         _findDuplicates = findDuplicates;
         _compareDatasets = compareDatasets;
         _joinDatasets = joinDatasets;
@@ -934,7 +939,8 @@ public partial class MainWindow : Window
                         tableName ?? string.Empty,
                         options.TargetTableName,
                         options.SelectedColumns,
-                        sourceSql),
+                        sourceSql,
+                        _columnFilters),
                     cancellationToken);
                 _adHocTableName = result.TableName;
                 _pageOffset = 0;
@@ -970,7 +976,8 @@ public partial class MainWindow : Window
                     ';',
                     true,
                     options.SelectedColumns,
-                    sourceSql),
+                    sourceSql,
+                    _columnFilters),
                 cancellationToken);
             MessageBox.Show(this, $"Wyeksportowano {result.ExportedRows} wierszy do:\n{result.FilePath}", "CSVForge", MessageBoxButton.OK, MessageBoxImage.Information);
         }, "Eksport zakończony");
@@ -1493,6 +1500,11 @@ public partial class MainWindow : Window
             ExportResultButton.Visibility = Visibility.Collapsed;
             return;
         }
+        if (!string.Equals(_columnFilterTableName, tableName, StringComparison.OrdinalIgnoreCase))
+        {
+            _columnFilters.Clear();
+            _columnFilterTableName = tableName;
+        }
         await RunUiActionAsync(async () =>
         {
             TablePage page = await _browseTable.ExecuteAsync(new BrowseTableRequest(
@@ -1500,7 +1512,8 @@ public partial class MainWindow : Window
                 PageSize,
                 _pageOffset,
                 _sortColumn,
-                _sortDescending));
+                _sortDescending,
+                _columnFilters));
 
             string title = _adHocTableName is null ? _selectedImport!.DisplayName : "Wynik operacji";
             TableTitleText.Text = $"{title} ({page.TotalRows} wierszy)";
@@ -1549,9 +1562,32 @@ public partial class MainWindow : Window
 
         foreach (string column in columns)
         {
+            object headerContent = column;
+            if (_sqlResultQuery is null)
+            {
+                Grid header = new();
+                header.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+                header.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+                TextBlock label = new() { Text = column, VerticalAlignment = VerticalAlignment.Center, TextTrimming = TextTrimming.CharacterEllipsis };
+                bool filterActive = _columnFilters.ContainsKey(column);
+                Button filterButton = new()
+                {
+                    Content = filterActive ? "●" : "▾",
+                    ToolTip = filterActive ? "Filtr aktywny — kliknij, aby zmienić" : "Filtruj kolumnę",
+                    MinWidth = 24,
+                    Padding = new Thickness(4, 1, 4, 1),
+                    Margin = new Thickness(6, 0, 0, 0),
+                    Foreground = filterActive ? Brushes.DodgerBlue : Brushes.SlateGray
+                };
+                filterButton.Click += async (_, _) => await ShowColumnFilterAsync(column);
+                Grid.SetColumn(filterButton, 1);
+                header.Children.Add(label);
+                header.Children.Add(filterButton);
+                headerContent = header;
+            }
             DataGrid.Columns.Add(new DataGridTextColumn
             {
-                Header = column,
+                Header = headerContent,
                 SortMemberPath = column,
                 SortDirection = string.Equals(_sortColumn, column, StringComparison.OrdinalIgnoreCase)
                     ? _sortDescending
@@ -1572,6 +1608,25 @@ public partial class MainWindow : Window
                 .ToString(CultureInfo.InvariantCulture);
         }
         DataGrid.ItemsSource = numberedRows;
+    }
+
+    private async Task ShowColumnFilterAsync(string columnName)
+    {
+        string? tableName = _adHocTableName ?? _selectedImport?.TableName;
+        if (tableName is null || _sqlResultQuery is not null) return;
+
+        await RunUiActionAsync(async cancellationToken =>
+        {
+            IReadOnlyList<ColumnValueOption> values = await _getColumnValues.ExecuteAsync(
+                new ColumnValuesRequest(tableName, columnName, _columnFilters), cancellationToken);
+            _columnFilters.TryGetValue(columnName, out IReadOnlyList<string?>? selectedValues);
+            ColumnFilterWindow dialog = new(columnName, values, selectedValues) { Owner = this };
+            if (dialog.ShowDialog() != true) return;
+            if (dialog.ClearFilter || dialog.SelectedValues.Count == dialog.TotalValueCount) _columnFilters.Remove(columnName);
+            else _columnFilters[columnName] = dialog.SelectedValues;
+            _pageOffset = 0;
+            await RefreshSelectedTableAsync();
+        }, "Filtr zastosowany");
     }
 
     private async void ExecuteSql_Click(object sender, RoutedEventArgs e)
@@ -1627,6 +1682,8 @@ public partial class MainWindow : Window
         _sqlResultQuery = operation.Sql;
         _sqlResultPagingEnabled = true;
         _sqlResultTitle = title;
+        _columnFilters.Clear();
+        _columnFilterTableName = null;
         _sortColumn = null;
         _sortDescending = false;
         _pageOffset = 0;

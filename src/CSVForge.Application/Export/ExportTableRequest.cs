@@ -6,4 +6,5 @@ public sealed record ExportTableRequest(
     char Delimiter,
     bool IncludeHeader,
     IReadOnlyList<string>? Columns = null,
-    string? SourceSql = null);
+    string? SourceSql = null,
+    IReadOnlyDictionary<string, IReadOnlyList<string?>>? ColumnFilters = null);

@@ -70,7 +70,8 @@ internal sealed class SqliteTableExporter(IWorkspaceContext workspaceContext) : 
         string source = string.IsNullOrWhiteSpace(request.SourceSql)
             ? CsvImportNameHelper.QuoteIdentifier(request.TableName)
             : $"({NormalizeSql(request.SourceSql)}) AS _sql_result";
-        command.CommandText = $"SELECT {projection} FROM {source};";
+        string whereClause = SqliteExportFilterBuilder.Build(command, tableColumns, request.ColumnFilters);
+        command.CommandText = $"SELECT {projection} FROM {source}{whereClause};";
         await using SqliteDataReader reader = await command.ExecuteReaderAsync(cancellationToken);
         await using StreamWriter writer = new(temporaryPath, false, new UTF8Encoding(encoderShouldEmitUTF8Identifier: true));
         string delimiter = request.Delimiter.ToString();

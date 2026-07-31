@@ -19,6 +19,7 @@ using System.Windows.Controls;
 using System.Windows.Data;
 using System.Windows.Input;
 using System.Windows.Media;
+using System.Windows.Threading;
 using Microsoft.Data.Sqlite;
 using Serilog;
 using ICSharpCode.AvalonEdit.CodeCompletion;
@@ -1052,7 +1053,25 @@ public partial class MainWindow : Window
         Guid importId = _selectedImport.Id;
         await RunUiActionAsync(async cancellationToken =>
         {
-            await _deleteImport.ExecuteAsync(importId, cancellationToken);
+            BusyWindow busyWindow = new("Usuwanie tabeli i kompaktowanie workspace…")
+            {
+                Owner = this
+            };
+            bool wasEnabled = IsEnabled;
+            try
+            {
+                busyWindow.Show();
+                IsEnabled = false;
+                await Dispatcher.InvokeAsync(() => { }, DispatcherPriority.ContextIdle);
+                await Task.Run(() => _deleteImport.ExecuteAsync(importId, cancellationToken), cancellationToken);
+            }
+            finally
+            {
+                busyWindow.Close();
+                IsEnabled = wasEnabled;
+                Activate();
+            }
+
             _selectedImport = null;
             _adHocTableName = null;
             DataGrid.ItemsSource = null;

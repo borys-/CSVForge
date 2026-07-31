@@ -1405,9 +1405,9 @@ public partial class MainWindow : Window
             SortMemberPath = RowNumberColumnKey,
             CanUserSort = false,
             Binding = new Binding($"[{RowNumberColumnKey}]") { Mode = BindingMode.OneWay },
-            Width = new DataGridLength(64),
-            MinWidth = 52,
-            MaxWidth = 90
+            Width = new DataGridLength(48),
+            MinWidth = 40,
+            MaxWidth = 72
         });
 
         foreach (string column in columns)
@@ -1447,8 +1447,8 @@ public partial class MainWindow : Window
                     : null,
                 Binding = new Binding($"[{column}]") { Mode = BindingMode.OneWay },
                 Width = DataGridLength.Auto,
-                MinWidth = 100,
-                MaxWidth = 600
+                MinWidth = 72,
+                MaxWidth = 400
             });
         }
 

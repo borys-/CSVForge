@@ -69,7 +69,12 @@
                     <ColumnDefinition Width="*" />
                 </Grid.ColumnDefinitions>
 
-                <Border Background="{StaticResource SurfaceBrush}" BorderBrush="{StaticResource BorderBrush}" BorderThickness="1" CornerRadius="10" Padding="14">
+                <Border x:Name="FilesDropArea" Background="{StaticResource SurfaceBrush}"
+                        BorderBrush="{StaticResource BorderBrush}" BorderThickness="1" CornerRadius="10" Padding="14"
+                        AllowDrop="True" DragEnter="FilesDropArea_DragEnter" DragOver="FilesDropArea_DragOver"
+                        DragLeave="FilesDropArea_DragLeave" Drop="FilesDropArea_Drop"
+                        AutomationProperties.Name="Lista tabel z plików CSV"
+                        AutomationProperties.HelpText="Przeciągnij tutaj pliki CSV lub użyj przycisku Dodaj plik CSV.">
                     <DockPanel>
                         <Grid DockPanel.Dock="Top" Margin="0,0,0,10">
                             <Grid.ColumnDefinitions>
@@ -82,7 +87,8 @@
                             </StackPanel>
                             <Button Grid.Column="1" Width="34" Height="34" Content="+" FontSize="19" FontWeight="SemiBold"
                                     Style="{StaticResource PrimaryButton}" Padding="0"
-                                    ToolTip="Dodaj plik CSV" Click="ChooseCsv_Click" />
+                                    ToolTip="Dodaj plik CSV" AutomationProperties.Name="Dodaj plik CSV"
+                                    Click="ChooseCsv_Click" />
                         </Grid>
 
                         <Expander DockPanel.Dock="Bottom" Header="Historia operacji" Margin="0,10,0,0" IsExpanded="False">
@@ -105,8 +111,19 @@
                             </Border>
                         </Expander>
 
+                        <Border DockPanel.Dock="Top" Background="{StaticResource SurfaceMutedBrush}"
+                                BorderBrush="{StaticResource BorderBrush}" BorderThickness="1" CornerRadius="6"
+                                Padding="9,7" Margin="0,0,0,8" IsHitTestVisible="False">
+                            <TextBlock x:Name="DropHintText" Text="Upuść tutaj pliki CSV, aby dodać je jako tabele"
+                                       Foreground="{StaticResource TextMutedBrush}" TextWrapping="Wrap"
+                                       TextAlignment="Center" FontSize="11"
+                                       AutomationProperties.LiveSetting="Polite" />
+                        </Border>
+
                         <ListBox x:Name="ImportsListBox" SelectionChanged="ImportsListBox_SelectionChanged"
-                                 HorizontalContentAlignment="Stretch" PreviewMouseRightButtonDown="ListBox_PreviewMouseRightButtonDown">
+                                 HorizontalContentAlignment="Stretch" PreviewMouseRightButtonDown="ListBox_PreviewMouseRightButtonDown"
+                                 AllowDrop="True" DragEnter="FilesDropArea_DragEnter" DragOver="FilesDropArea_DragOver"
+                                 DragLeave="FilesDropArea_DragLeave" Drop="FilesDropArea_Drop">
                             <ListBox.ContextMenu>
                                 <ContextMenu>
                                     <MenuItem Header="Zmień nazwę" Click="RenameImport_Click" />
@@ -324,14 +341,28 @@
                         <DataGrid x:Name="DataGrid"
                                   AutoGenerateColumns="False"
                                   IsReadOnly="True"
+                                  SelectionUnit="Cell"
+                                  SelectionMode="Extended"
+                                  ClipboardCopyMode="ExcludeHeader"
                                   CanUserAddRows="False"
                                   CanUserDeleteRows="False"
                                   GridLinesVisibility="Horizontal"
                                   HeadersVisibility="Column"
                                   Sorting="DataGrid_Sorting"
                                   LoadingRow="DataGrid_LoadingRow"
+                                  PreviewKeyDown="DataGrid_PreviewKeyDown"
+                                  PreviewMouseRightButtonDown="DataGrid_PreviewMouseRightButtonDown"
                                   EnableRowVirtualization="True"
-                                  EnableColumnVirtualization="True" />
+                                  EnableColumnVirtualization="True"
+                                  AutomationProperties.HelpText="Zaznacz komórkę i naciśnij Control+C, aby skopiować jej wartość.">
+                            <DataGrid.ContextMenu>
+                                <ContextMenu>
+                                    <MenuItem Header="Kopiuj wartość komórki"
+                                              InputGestureText="Ctrl+C"
+                                              Click="CopySelectedCell_Click" />
+                                </ContextMenu>
+                            </DataGrid.ContextMenu>
+                        </DataGrid>
                     </DockPanel>
                 </Border>
             </Grid>

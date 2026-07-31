@@ -1214,7 +1214,6 @@ public partial class MainWindow : Window
         _filesPanelMode = mode;
         bool showContent = mode == FilesPanelMode.Expanded;
         ShowFilesPanelContent(showContent);
-        UpdateFilesPanelModeButtons();
         if (persist)
         {
             SaveFilesPanelPreferences();
@@ -1233,12 +1232,6 @@ public partial class MainWindow : Window
             ? Visibility.Visible
             : Visibility.Collapsed;
         FilesPanelSplitterColumn.Width = new GridLength(showSplitter ? 16 : 0);
-    }
-
-    private void UpdateFilesPanelModeButtons()
-    {
-        CollapseFilesPanelButton.Opacity = _filesPanelMode == FilesPanelMode.Collapsed ? 1 : 0.55;
-        ExpandFilesPanelButton.Opacity = _filesPanelMode == FilesPanelMode.Expanded ? 1 : 0.55;
     }
 
     private void LoadFilesPanelPreferences()

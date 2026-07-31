@@ -70,7 +70,6 @@
                                 <ColumnDefinition Width="*" />
                                 <ColumnDefinition Width="Auto" />
                                 <ColumnDefinition Width="Auto" />
-                                <ColumnDefinition Width="Auto" />
                             </Grid.ColumnDefinitions>
                             <StackPanel>
                                 <TextBlock Text="Pliki CSV" FontSize="16" FontWeight="SemiBold" />
@@ -81,12 +80,7 @@
                                     Click="SetFilesPanelCollapsed_Click">
                                 <Viewbox><Path Stroke="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}" StrokeThickness="1.6" StrokeStartLineCap="Round" StrokeEndLineCap="Round" StrokeLineJoin="Round" Data="M2,2 L14,2 L14,14 L2,14 Z M6,2 L6,14 M10,5 L7,8 L10,11" /></Viewbox>
                             </Button>
-                            <Button x:Name="ExpandFilesPanelButton" Grid.Column="2" Width="30" Height="30" Margin="4,0,0,0" Padding="6"
-                                    ToolTip="Pozostaw rozwinięty" AutomationProperties.Name="Pozostaw panel plików rozwinięty"
-                                    Click="SetFilesPanelExpanded_Click">
-                                <Viewbox><Path Stroke="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}" StrokeThickness="1.6" StrokeStartLineCap="Round" StrokeEndLineCap="Round" StrokeLineJoin="Round" Data="M2,2 L14,2 L14,14 L2,14 Z M7,2 L7,14" /></Viewbox>
-                            </Button>
-                            <Button Grid.Column="3" Width="34" Height="34" Content="+" FontSize="19" FontWeight="SemiBold" Margin="6,0,0,0"
+                            <Button Grid.Column="2" Width="34" Height="34" Content="+" FontSize="19" FontWeight="SemiBold" Margin="6,0,0,0"
                                     Style="{StaticResource PrimaryButton}" Padding="0"
                                     ToolTip="Dodaj plik CSV" AutomationProperties.Name="Dodaj plik CSV"
                                     Click="ChooseCsv_Click" />

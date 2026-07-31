@@ -85,6 +85,8 @@ public partial class MainWindow : Window
     private bool _updatingImports;
     private bool _updatingComparisonFiles;
     private bool _handlingDroppedFiles;
+    private FilesPanelMode _filesPanelMode = FilesPanelMode.Expanded;
+    private double _expandedFilesPanelWidth = 300;
     private int _activeImportCount;
     private SqlSchemaSnapshot _sqlSchema = SqlSchemaSnapshot.Empty;
     private CompletionWindow? _sqlCompletionWindow;
@@ -139,6 +141,7 @@ public partial class MainWindow : Window
         _getSqlSchema = getSqlSchema;
 
         InitializeComponent();
+        UpdateFilesPanelModeButtons();
         WorkspaceModeTabControl.SelectionChanged += WorkspaceModeTabControl_SelectionChanged;
         InitializeSqlEditor();
         _startupWorkspacePath = LoadRecentWorkspaces();
@@ -1193,10 +1196,76 @@ public partial class MainWindow : Window
             VisualTreeHelper.GetDpi(this).PixelsPerDip);
 
         double requiredWidth = Math.Ceiling(text.WidthIncludingTrailingWhitespace) + 58;
-        if (requiredWidth > FilesPanelColumn.ActualWidth)
+        _expandedFilesPanelWidth = Math.Max(
+            _expandedFilesPanelWidth,
+            Math.Min(requiredWidth, FilesPanelColumn.MaxWidth));
+        if (_filesPanelMode == FilesPanelMode.Expanded && requiredWidth > FilesPanelColumn.ActualWidth)
         {
             FilesPanelColumn.Width = new GridLength(Math.Min(requiredWidth, FilesPanelColumn.MaxWidth));
         }
+    }
+
+    private void SetFilesPanelCollapsed_Click(object sender, RoutedEventArgs e) =>
+        SetFilesPanelMode(FilesPanelMode.Collapsed);
+
+    private void SetFilesPanelExpanded_Click(object sender, RoutedEventArgs e) =>
+        SetFilesPanelMode(FilesPanelMode.Expanded);
+
+    private void SetFilesPanelAutoHide_Click(object sender, RoutedEventArgs e) =>
+        SetFilesPanelMode(FilesPanelMode.AutoHide);
+
+    private void FilesPanel_MouseEnter(object sender, MouseEventArgs e)
+    {
+        if (_filesPanelMode == FilesPanelMode.AutoHide)
+        {
+            ShowFilesPanelContent(true);
+        }
+    }
+
+    private void FilesPanel_MouseLeave(object sender, MouseEventArgs e)
+    {
+        if (_filesPanelMode == FilesPanelMode.AutoHide)
+        {
+            ShowFilesPanelContent(false);
+        }
+    }
+
+    private void SetFilesPanelMode(FilesPanelMode mode)
+    {
+        if (_filesPanelMode == FilesPanelMode.Expanded && FilesPanelColumn.ActualWidth >= 240)
+        {
+            _expandedFilesPanelWidth = Math.Clamp(FilesPanelColumn.ActualWidth, 240, FilesPanelColumn.MaxWidth);
+        }
+
+        _filesPanelMode = mode;
+        bool showContent = mode == FilesPanelMode.Expanded
+            || mode == FilesPanelMode.AutoHide && FilesDropArea.IsMouseOver;
+        ShowFilesPanelContent(showContent);
+        UpdateFilesPanelModeButtons();
+    }
+
+    private void ShowFilesPanelContent(bool show)
+    {
+        FilesPanelColumn.MinWidth = show ? 240 : 48;
+        FilesPanelColumn.Width = new GridLength(show ? _expandedFilesPanelWidth : 48);
+        FilesDropArea.Padding = show ? new Thickness(14) : new Thickness(7);
+        FilesPanelContent.Visibility = show ? Visibility.Visible : Visibility.Collapsed;
+        OpenFilesPanelButton.Visibility = show ? Visibility.Collapsed : Visibility.Visible;
+        bool showSplitter = show && _filesPanelMode == FilesPanelMode.Expanded;
+        FilesPanelSplitter.Visibility = showSplitter
+            ? Visibility.Visible
+            : Visibility.Collapsed;
+        FilesPanelSplitterColumn.Width = new GridLength(showSplitter ? 16 : 0);
+        OpenFilesPanelButton.ToolTip = _filesPanelMode == FilesPanelMode.AutoHide
+            ? "Panel rozwinie się po najechaniu"
+            : "Rozwiń panel plików";
+    }
+
+    private void UpdateFilesPanelModeButtons()
+    {
+        CollapseFilesPanelButton.Opacity = _filesPanelMode == FilesPanelMode.Collapsed ? 1 : 0.55;
+        ExpandFilesPanelButton.Opacity = _filesPanelMode == FilesPanelMode.Expanded ? 1 : 0.55;
+        AutoHideFilesPanelButton.Opacity = _filesPanelMode == FilesPanelMode.AutoHide ? 1 : 0.55;
     }
 
     private void UpdateComparisonFiles()
@@ -2182,6 +2251,13 @@ public partial class MainWindow : Window
     private sealed record WorkspaceChoice(string FullPath, bool IsCreateNew = false)
     {
         public string DisplayName => IsCreateNew ? FullPath : Path.GetFileName(FullPath);
+    }
+
+    private enum FilesPanelMode
+    {
+        Collapsed,
+        Expanded,
+        AutoHide
     }
 
     private sealed record AdditionalCompareFileRow(

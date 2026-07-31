@@ -53,27 +53,47 @@
             <Grid>
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition x:Name="FilesPanelColumn" Width="300" MinWidth="240" MaxWidth="600" />
-                    <ColumnDefinition Width="16" />
+                    <ColumnDefinition x:Name="FilesPanelSplitterColumn" Width="16" />
                     <ColumnDefinition Width="*" />
                 </Grid.ColumnDefinitions>
 
                 <Border x:Name="FilesDropArea" Background="{StaticResource SurfaceBrush}"
                         BorderBrush="{StaticResource BorderBrush}" BorderThickness="1" CornerRadius="10" Padding="14"
+                        MouseEnter="FilesPanel_MouseEnter" MouseLeave="FilesPanel_MouseLeave"
                         AllowDrop="True" DragEnter="FilesDropArea_DragEnter" DragOver="FilesDropArea_DragOver"
                         DragLeave="FilesDropArea_DragLeave" Drop="FilesDropArea_Drop"
                         AutomationProperties.Name="Lista tabel z plików CSV"
                         AutomationProperties.HelpText="Przeciągnij tutaj pliki CSV lub użyj przycisku Dodaj plik CSV.">
-                    <DockPanel>
+                    <Grid>
+                      <DockPanel x:Name="FilesPanelContent">
                         <Grid DockPanel.Dock="Top" Margin="0,0,0,10">
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" />
+                                <ColumnDefinition Width="Auto" />
+                                <ColumnDefinition Width="Auto" />
                                 <ColumnDefinition Width="Auto" />
                             </Grid.ColumnDefinitions>
                             <StackPanel>
                                 <TextBlock Text="Pliki CSV" FontSize="16" FontWeight="SemiBold" />
                                 <TextBlock Text="Źródła danych workspace" Foreground="{StaticResource TextMutedBrush}" FontSize="11" Margin="0,2,0,0" />
                             </StackPanel>
-                            <Button Grid.Column="1" Width="34" Height="34" Content="+" FontSize="19" FontWeight="SemiBold"
+                            <Button x:Name="CollapseFilesPanelButton" Grid.Column="1" Width="30" Height="30" Margin="4,0,0,0" Padding="6"
+                                    ToolTip="Zwiń panel" AutomationProperties.Name="Zwiń panel plików"
+                                    Click="SetFilesPanelCollapsed_Click">
+                                <Viewbox><Path Stroke="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}" StrokeThickness="1.6" StrokeStartLineCap="Round" StrokeEndLineCap="Round" StrokeLineJoin="Round" Data="M2,2 L14,2 L14,14 L2,14 Z M6,2 L6,14 M10,5 L7,8 L10,11" /></Viewbox>
+                            </Button>
+                            <Button x:Name="ExpandFilesPanelButton" Grid.Column="2" Width="30" Height="30" Margin="4,0,0,0" Padding="6"
+                                    ToolTip="Pozostaw rozwinięty" AutomationProperties.Name="Pozostaw panel plików rozwinięty"
+                                    Click="SetFilesPanelExpanded_Click">
+                                <Viewbox><Path Stroke="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}" StrokeThickness="1.6" StrokeStartLineCap="Round" StrokeEndLineCap="Round" StrokeLineJoin="Round" Data="M2,2 L14,2 L14,14 L2,14 Z M7,2 L7,14" /></Viewbox>
+                            </Button>
+                            <Button x:Name="AutoHideFilesPanelButton" Grid.Column="3" Width="30" Height="30" Margin="4,0,0,0" Padding="6"
+                                    ToolTip="Rozwijaj automatycznie po najechaniu" AutomationProperties.Name="Automatycznie zwijaj panel plików"
+                                    Click="SetFilesPanelAutoHide_Click">
+                                <Viewbox><Path Stroke="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}" StrokeThickness="1.6" StrokeStartLineCap="Round" StrokeEndLineCap="Round" StrokeLineJoin="Round" Data="M5,2 L11,2 M6,2 L6,7 L3,10 L13,10 L10,7 L10,2 M8,10 L8,15" /></Viewbox>
+                            </Button>
+                            <Button Grid.Column="4" Width="34" Height="34" Content="+" FontSize="19" FontWeight="SemiBold" Margin="6,0,0,0"
                                     Style="{StaticResource PrimaryButton}" Padding="0"
                                     ToolTip="Dodaj plik CSV" AutomationProperties.Name="Dodaj plik CSV"
                                     Click="ChooseCsv_Click" />
@@ -117,10 +137,18 @@
                                 </DataTemplate>
                             </ListBox.ItemTemplate>
                         </ListBox>
-                    </DockPanel>
+                      </DockPanel>
+
+                      <Button x:Name="OpenFilesPanelButton" Width="32" Height="32" Padding="7"
+                              HorizontalAlignment="Center" VerticalAlignment="Top" Visibility="Collapsed"
+                              ToolTip="Rozwiń panel plików" AutomationProperties.Name="Rozwiń panel plików"
+                              Click="SetFilesPanelExpanded_Click">
+                          <Viewbox><Path Stroke="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}" StrokeThickness="1.6" StrokeStartLineCap="Round" StrokeEndLineCap="Round" StrokeLineJoin="Round" Data="M2,2 L14,2 L14,14 L2,14 Z M6,2 L6,14 M8,5 L11,8 L8,11" /></Viewbox>
+                      </Button>
+                    </Grid>
                 </Border>
 
-                <GridSplitter Grid.Column="1" Width="14" HorizontalAlignment="Stretch" VerticalAlignment="Stretch"
+                <GridSplitter x:Name="FilesPanelSplitter" Grid.Column="1" Width="14" HorizontalAlignment="Stretch" VerticalAlignment="Stretch"
                               Background="Transparent" Cursor="SizeWE" ResizeDirection="Columns" ResizeBehavior="PreviousAndNext"
                               ShowsPreview="True" ToolTip="Zmień szerokość panelu plików" />
 

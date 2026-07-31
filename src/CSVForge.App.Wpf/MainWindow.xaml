@@ -178,7 +178,20 @@
                                            Text="Import danych nadal trwa. Wynik porównania, łączenia lub wyszukiwania duplikatów może być niepełny. Operacje pozostają dostępne." />
                             </Border>
 
-                            <TabControl MinHeight="156" Padding="4">
+                            <TabControl x:Name="WorkspaceModeTabControl" MinHeight="156" Padding="4">
+                                <TabItem x:Name="BrowseTab" Header="Przeglądaj">
+                                    <Grid Margin="8">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*" />
+                                            <ColumnDefinition Width="Auto" />
+                                        </Grid.ColumnDefinitions>
+                                        <TextBlock Text="Widok tabeli" FontWeight="SemiBold"
+                                                   VerticalAlignment="Center" />
+                                        <Button Grid.Column="1" Content="Odśwież dane"
+                                                MinWidth="112" Click="RefreshTable_Click" />
+                                    </Grid>
+                                </TabItem>
+
                                 <TabItem Header="Duplikaty">
                                     <Grid Margin="8">
                                         <Grid.RowDefinitions>

@@ -435,6 +435,7 @@ public partial class MainWindow : Window
     private async void ImportsListBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
     {
         _selectedImport = ImportsListBox.SelectedItem as CsvImport;
+        WorkspaceModeTabControl.SelectedItem = BrowseTab;
         _adHocTableName = null;
         _pageOffset = 0;
         _sortColumn = null;

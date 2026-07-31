@@ -10,7 +10,8 @@
                        ToolTip="{Binding SourcePath}" />
         </DataTemplate>
     </Window.Resources>
-    <DockPanel>
+    <Grid>
+      <DockPanel>
         <Border DockPanel.Dock="Top" Background="#111827" Padding="20,14">
             <Grid>
                 <Grid.ColumnDefinitions>
@@ -45,26 +46,6 @@
                 </ComboBox>
                 <Button Grid.Column="3" Content="Logi" Style="{StaticResource ToolbarButton}" Margin="0,0,8,0" Click="OpenLogs_Click" />
                 <Button Grid.Column="4" Content="O programie" Style="{StaticResource ToolbarButton}" Click="ShowAbout_Click" />
-            </Grid>
-        </Border>
-
-        <Border DockPanel.Dock="Bottom" Background="{StaticResource SurfaceBrush}" BorderBrush="{StaticResource BorderBrush}"
-                BorderThickness="0,1,0,0" Padding="20,9">
-            <Grid>
-                <Grid.ColumnDefinitions>
-                    <ColumnDefinition Width="Auto" />
-                    <ColumnDefinition Width="*" />
-                    <ColumnDefinition Width="Auto" />
-                    <ColumnDefinition Width="Auto" />
-                </Grid.ColumnDefinitions>
-                <ProgressBar x:Name="OperationProgressBar" Width="110" Height="6" Margin="0,0,12,0"
-                             IsIndeterminate="True" Visibility="Collapsed" VerticalAlignment="Center" />
-                <TextBlock x:Name="StatusText" Grid.Column="1" Foreground="{StaticResource TextMutedBrush}"
-                           VerticalAlignment="Center" Text="Gotowy" />
-                <TextBlock x:Name="ImportStatusText" Grid.Column="2" Foreground="#B45309" FontWeight="SemiBold"
-                           VerticalAlignment="Center" Margin="16,0" Visibility="Collapsed" />
-                <Button x:Name="CancelOperationButton" Grid.Column="3" Content="Anuluj operację" MinHeight="28"
-                        Padding="10,0" Visibility="Collapsed" Click="CancelOperation_Click" />
             </Grid>
         </Border>
 
@@ -382,5 +363,31 @@
                 </Border>
             </Grid>
         </Grid>
-    </DockPanel>
+      </DockPanel>
+
+      <Border x:Name="StatusOverlay" Panel.ZIndex="100" Visibility="Collapsed"
+              HorizontalAlignment="Center" VerticalAlignment="Bottom" Margin="20"
+              MinWidth="380" MaxWidth="900" Padding="16,10"
+              Background="#F8FAFC" BorderBrush="#CBD5E1" BorderThickness="1" CornerRadius="8">
+          <Border.Effect>
+              <DropShadowEffect BlurRadius="16" ShadowDepth="2" Opacity="0.22" />
+          </Border.Effect>
+          <Grid>
+              <Grid.ColumnDefinitions>
+                  <ColumnDefinition Width="Auto" />
+                  <ColumnDefinition Width="*" />
+                  <ColumnDefinition Width="Auto" />
+                  <ColumnDefinition Width="Auto" />
+              </Grid.ColumnDefinitions>
+              <ProgressBar x:Name="OperationProgressBar" Width="90" Height="6" Margin="0,0,12,0"
+                           IsIndeterminate="True" Visibility="Collapsed" VerticalAlignment="Center" />
+              <TextBlock x:Name="StatusText" Grid.Column="1" Foreground="{StaticResource TextMutedBrush}"
+                         VerticalAlignment="Center" />
+              <TextBlock x:Name="ImportStatusText" Grid.Column="2" Foreground="#B45309" FontWeight="SemiBold"
+                         VerticalAlignment="Center" Margin="16,0" Visibility="Collapsed" />
+              <Button x:Name="CancelOperationButton" Grid.Column="3" Content="Anuluj operację" MinHeight="28"
+                      Padding="10,0" Visibility="Collapsed" Click="CancelOperation_Click" />
+          </Grid>
+      </Border>
+    </Grid>
 </Window>

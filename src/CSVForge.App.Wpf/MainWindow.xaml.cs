@@ -77,6 +77,7 @@ public partial class MainWindow : Window
     private string? _sortColumn;
     private bool _sortDescending;
     private CancellationTokenSource? _operationCancellation;
+    private CancellationTokenSource? _statusOverlayHideCancellation;
     private string _startupWorkspacePath = DefaultWorkspacePath;
     private string? _currentWorkspacePath;
     private bool _workspaceSelectionReady;
@@ -260,7 +261,7 @@ public partial class MainWindow : Window
 
         if (_handlingDroppedFiles)
         {
-            StatusText.Text = "Poczekaj na zakończenie dodawania plików";
+            ShowStatusMessage("Poczekaj na zakończenie dodawania plików");
             return;
         }
 
@@ -274,7 +275,7 @@ public partial class MainWindow : Window
 
         if (csvPaths.Length == 0)
         {
-            StatusText.Text = "Nie dodano plików";
+            ShowStatusMessage("Nie dodano plików");
             MessageBox.Show(
                 this,
                 "Upuść co najmniej jeden istniejący plik z rozszerzeniem .csv.",
@@ -289,7 +290,7 @@ public partial class MainWindow : Window
         {
             foreach (string path in csvPaths)
             {
-                StatusText.Text = $"Dodawanie pliku {Path.GetFileName(path)}";
+                ShowStatusMessage($"Dodawanie pliku {Path.GetFileName(path)}", autoHide: false);
                 await ShowImportPreviewAsync(path);
             }
 
@@ -398,6 +399,7 @@ public partial class MainWindow : Window
 
     private void ShowImportProgress(ImportProgress progress)
     {
+        ShowStatusMessage("Importowanie danych…", autoHide: false);
         ImportWarningBorder.Visibility = Visibility.Visible;
         ImportStatusText.Visibility = Visibility.Visible;
         string remaining = progress.PercentRemaining is { } percent
@@ -414,17 +416,17 @@ public partial class MainWindow : Window
             await RefreshImportsAsync();
             SelectImport(result.Import.Id);
             ExpandFilesPanelToFit(result.Import.DisplayName);
-            StatusText.Text = $"Zaimportowano {result.Import.RowCount:N0} wierszy";
+            ShowStatusMessage($"Zaimportowano {result.Import.RowCount:N0} wierszy");
             await RefreshSqlSchemaAsync();
         }
         catch (OperationCanceledException)
         {
-            StatusText.Text = "Import anulowany";
+            ShowStatusMessage("Import anulowany");
             await RefreshImportsAsync();
         }
         catch (Exception ex)
         {
-            StatusText.Text = "Błąd importu";
+            ShowStatusMessage("Błąd importu");
             await RefreshImportsAsync();
             MessageBox.Show(this, PolishErrorMessage(ex), "CSVForge", MessageBoxButton.OK, MessageBoxImage.Error);
         }
@@ -438,6 +440,7 @@ public partial class MainWindow : Window
             {
                 ImportStatusText.Visibility = Visibility.Collapsed;
                 ImportWarningBorder.Visibility = Visibility.Collapsed;
+                ScheduleStatusOverlayHide();
             }
         }
     }
@@ -595,7 +598,7 @@ public partial class MainWindow : Window
 
         if (selectedCells.Count == 0)
         {
-            StatusText.Text = "Najpierw zaznacz co najmniej jedną komórkę";
+            ShowStatusMessage("Najpierw zaznacz co najmniej jedną komórkę");
             return false;
         }
 
@@ -612,7 +615,7 @@ public partial class MainWindow : Window
             .ToArray();
         if (cells.Length == 0)
         {
-            StatusText.Text = "Nie udało się odczytać zaznaczenia";
+            ShowStatusMessage("Nie udało się odczytać zaznaczenia");
             return false;
         }
 
@@ -647,15 +650,15 @@ public partial class MainWindow : Window
         try
         {
             Clipboard.SetText(string.Join(Environment.NewLine, clipboardRows));
-            StatusText.Text = cells.Length == 1
+            ShowStatusMessage(cells.Length == 1
                 ? "Skopiowano wartość komórki"
-                : $"Skopiowano komórki: {cells.Length:N0}";
+                : $"Skopiowano komórki: {cells.Length:N0}");
             return true;
         }
         catch (Exception ex)
         {
             Log.Warning(ex, "Could not copy a data grid cell value to the clipboard");
-            StatusText.Text = "Nie udało się skopiować wartości";
+            ShowStatusMessage("Nie udało się skopiować wartości");
             MessageBox.Show(
                 this,
                 "Schowek jest obecnie niedostępny. Spróbuj ponownie.",
@@ -1996,19 +1999,19 @@ public partial class MainWindow : Window
         _operationCancellation = new CancellationTokenSource();
         try
         {
-            StatusText.Text = "Pracuję...";
+            ShowStatusMessage("Pracuję…", autoHide: false);
             OperationProgressBar.Visibility = Visibility.Visible;
             CancelOperationButton.Visibility = Visibility.Visible;
             await action(_operationCancellation.Token);
-            StatusText.Text = successMessage;
+            ShowStatusMessage(successMessage, autoHide: false);
         }
         catch (OperationCanceledException)
         {
-            StatusText.Text = "Anulowano";
+            ShowStatusMessage("Anulowano", autoHide: false);
         }
         catch (Exception ex)
         {
-            StatusText.Text = "Błąd";
+            ShowStatusMessage("Błąd", autoHide: false);
             MessageBox.Show(this, PolishErrorMessage(ex), "CSVForge", MessageBoxButton.OK, MessageBoxImage.Error);
         }
         finally
@@ -2017,6 +2020,58 @@ public partial class MainWindow : Window
             CancelOperationButton.Visibility = Visibility.Collapsed;
             _operationCancellation.Dispose();
             _operationCancellation = null;
+            ScheduleStatusOverlayHide();
+        }
+    }
+
+    private void ShowStatusMessage(string message, bool autoHide = true)
+    {
+        _statusOverlayHideCancellation?.Cancel();
+        _statusOverlayHideCancellation?.Dispose();
+        _statusOverlayHideCancellation = null;
+        StatusText.Text = message;
+        StatusOverlay.Visibility = Visibility.Visible;
+
+        if (autoHide && _activeImportCount == 0 && _operationCancellation is null)
+        {
+            ScheduleStatusOverlayHide();
+        }
+    }
+
+    private void ScheduleStatusOverlayHide()
+    {
+        if (_activeImportCount > 0 || _operationCancellation is not null)
+        {
+            return;
+        }
+
+        _statusOverlayHideCancellation?.Cancel();
+        _statusOverlayHideCancellation?.Dispose();
+        CancellationTokenSource cancellation = new();
+        _statusOverlayHideCancellation = cancellation;
+        _ = HideStatusOverlayAfterDelayAsync(cancellation);
+    }
+
+    private async Task HideStatusOverlayAfterDelayAsync(CancellationTokenSource cancellation)
+    {
+        try
+        {
+            await Task.Delay(TimeSpan.FromSeconds(3), cancellation.Token);
+            if (_activeImportCount == 0 && _operationCancellation is null)
+            {
+                StatusOverlay.Visibility = Visibility.Collapsed;
+            }
+        }
+        catch (OperationCanceledException)
+        {
+        }
+        finally
+        {
+            if (ReferenceEquals(_statusOverlayHideCancellation, cancellation))
+            {
+                _statusOverlayHideCancellation = null;
+            }
+            cancellation.Dispose();
         }
     }
 

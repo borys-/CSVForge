@@ -29,12 +29,13 @@ internal sealed class SqliteDatasetJoiner(IWorkspaceContext workspaceContext) : 
 
         string resultTableName = $"_join_{DateTimeOffset.UtcNow:yyyyMMddHHmmssfff}";
         await using SqliteCommand command = connection.CreateCommand();
-        command.CommandText = BuildSql(request, resultTableName);
+        string sql = BuildSql(request, resultTableName);
+        command.CommandText = sql;
         await command.ExecuteNonQueryAsync(cancellationToken);
 
         long rowCount = await CountRowsAsync(connection, resultTableName, cancellationToken);
         await SaveOperationAsync(connection, resultTableName, request.JoinType, rowCount, cancellationToken);
-        return OperationResult.Ok(resultTableName, $"Połączenie zwróciło {rowCount} wierszy.");
+        return OperationResult.Ok(resultTableName, $"Połączenie zwróciło {rowCount} wierszy.", sql);
     }
 
     private static void Validate(DatasetJoinRequest request)

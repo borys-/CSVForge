@@ -714,6 +714,7 @@ public partial class MainWindow : Window
                 SelectedEnum(DuplicateModeComboBox, DuplicateSearchMode.AllDuplicateRows),
                 IgnoreEmptyKeysCheckBox.IsChecked == true));
 
+            ShowGeneratedSql(result);
             _adHocTableName = result.ResultTableName;
             _pageOffset = 0;
             await RefreshSelectedTableAsync();
@@ -770,6 +771,7 @@ public partial class MainWindow : Window
                 sources,
                 SelectedEnum(CompareModeComboBox, DatasetCompareMode.AllWithStatus)));
 
+            ShowGeneratedSql(result);
             _adHocTableName = result.ResultTableName;
             _pageOffset = 0;
             _sortColumn = leftKeys[0];
@@ -817,6 +819,7 @@ public partial class MainWindow : Window
                 ParseColumns(RightOutputColumnsTextBox.Text),
                 SelectedEnum(JoinTypeComboBox, DatasetJoinType.Left)));
 
+            ShowGeneratedSql(result);
             _adHocTableName = result.ResultTableName;
             _pageOffset = 0;
             await RefreshSelectedTableAsync();
@@ -1419,6 +1422,17 @@ public partial class MainWindow : Window
             handledEventsToo: true);
         SqlQueryTextBox.TextArea.TextEntered += SqlEditor_TextEntered;
         SqlQueryTextBox.TextArea.TextEntering += SqlEditor_TextEntering;
+    }
+
+    private void ShowGeneratedSql(OperationResult result)
+    {
+        if (string.IsNullOrWhiteSpace(result.Sql))
+        {
+            return;
+        }
+
+        SqlQueryTextBox.Text = result.Sql;
+        SqlStatusText.Text = "SQL ostatniej operacji — przed ponownym wykonaniem zmień nazwę tabeli wynikowej";
     }
 
     private async void SqlEditor_PreviewKeyDown(object sender, KeyEventArgs e)

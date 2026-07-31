@@ -31,15 +31,16 @@ internal sealed class SqliteDuplicateFinder(IWorkspaceContext workspaceContext) 
         string emptyFilter = BuildEmptyFilter(request);
 
         await using SqliteCommand command = connection.CreateCommand();
-        command.CommandText = request.Mode == DuplicateSearchMode.Summary
+        string sql = request.Mode == DuplicateSearchMode.Summary
             ? BuildSummarySql(request.TableName, resultTableName, keyColumnsSql, emptyFilter)
             : BuildRowsSql(request.TableName, resultTableName, keyColumnsSql, emptyFilter);
+        command.CommandText = sql;
         await command.ExecuteNonQueryAsync(cancellationToken);
 
         long duplicateCount = await CountRowsAsync(connection, resultTableName, cancellationToken);
         await SaveOperationAsync(connection, "duplicates", resultTableName, $"Found {duplicateCount} duplicate result rows.", cancellationToken);
 
-        return OperationResult.Ok(resultTableName, $"Znaleziono {duplicateCount} wierszy wyniku duplikatów.");
+        return OperationResult.Ok(resultTableName, $"Znaleziono {duplicateCount} wierszy wyniku duplikatów.", sql);
     }
 
     private static string BuildSummarySql(string tableName, string resultTableName, string keyColumnsSql, string emptyFilter)

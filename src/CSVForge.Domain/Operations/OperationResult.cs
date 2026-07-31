@@ -3,11 +3,12 @@ namespace CSVForge.Domain.Operations;
 public sealed record OperationResult(
     bool Success,
     string? ResultTableName,
-    string Message)
+    string Message,
+    string? Sql = null)
 {
-    public static OperationResult Ok(string resultTableName, string message)
+    public static OperationResult Ok(string resultTableName, string message, string? sql = null)
     {
-        return new OperationResult(true, resultTableName, message);
+        return new OperationResult(true, resultTableName, message, sql);
     }
 
     public static OperationResult Failed(string message)

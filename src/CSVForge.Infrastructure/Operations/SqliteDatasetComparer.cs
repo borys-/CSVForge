@@ -29,7 +29,8 @@ internal sealed class SqliteDatasetComparer(IWorkspaceContext workspaceContext) 
 
         string resultTableName = $"_compare_{DateTimeOffset.UtcNow:yyyyMMddHHmmssfff}";
         await using SqliteCommand command = connection.CreateCommand();
-        command.CommandText = BuildSql(request, resultTableName);
+        string sql = BuildSql(request, resultTableName);
+        command.CommandText = sql;
         await command.ExecuteNonQueryAsync(cancellationToken);
 
         IReadOnlyDictionary<string, long> counts = await CountStatusesAsync(connection, resultTableName, cancellationToken);
@@ -37,7 +38,7 @@ internal sealed class SqliteDatasetComparer(IWorkspaceContext workspaceContext) 
         string details = string.Join(", ", counts.OrderBy(item => item.Key).Select(item => $"{item.Key}: {item.Value}"));
         string message = $"Porównanie {request.Sources.Count} plików zwróciło {rowCount} wierszy ({details}).";
         await SaveOperationAsync(connection, resultTableName, message, cancellationToken);
-        return OperationResult.Ok(resultTableName, message);
+        return OperationResult.Ok(resultTableName, message, sql);
     }
 
     private static void Validate(DatasetCompareRequest request)

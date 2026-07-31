@@ -26,6 +26,7 @@ public sealed class SqliteOperationHistoryTests
         OperationResult result = await provider.GetRequiredService<IFindDuplicatesUseCase>()
             .ExecuteAsync(new DuplicateSearchRequest(import.Import.TableName, ["Id"], DuplicateSearchMode.Summary, false));
 
+        Assert.Contains($"CREATE TABLE \"{result.ResultTableName}\"", result.Sql);
         WorkspaceOperation operation = Assert.Single(await provider.GetRequiredService<IListOperationsUseCase>().ExecuteAsync());
         Assert.Equal("duplicates", operation.OperationType);
         Assert.Equal(result.ResultTableName, operation.ResultTableName);

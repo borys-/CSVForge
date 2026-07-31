@@ -48,9 +48,7 @@ internal sealed class SqliteTableMaterializer(IWorkspaceContext workspaceContext
         await using (SqliteCommand create = connection.CreateCommand())
         {
             create.Transaction = transaction;
-            string where = SqliteExportFilterBuilder.Build(
-                create, request.TextFilter, available, request.ColumnFilters);
-            create.CommandText = $"CREATE TABLE {target} AS SELECT {projection} FROM {source}{where};";
+            create.CommandText = $"CREATE TABLE {target} AS SELECT {projection} FROM {source};";
             await create.ExecuteNonQueryAsync(cancellationToken);
         }
 

@@ -28,18 +28,17 @@ public sealed class SqliteTableMaterializerTests
             .ExecuteAsync(new CreateTableFromResultRequest(
                 import.Import.TableName,
                 "wybrane_osoby",
-                ["Name"],
-                "Ada"));
+                ["Name"]));
 
-        Assert.Equal(1, result.RowCount);
+        Assert.Equal(2, result.RowCount);
         TablePage page = await provider.GetRequiredService<IBrowseTableUseCase>()
-            .ExecuteAsync(new BrowseTableRequest(result.TableName, 100, 0, null, false, null));
+            .ExecuteAsync(new BrowseTableRequest(result.TableName, 100, 0, null, false));
         Assert.Equal(["Name"], page.Columns);
-        Assert.Single(page.Rows);
+        Assert.Equal(2, page.Rows.Count);
         Assert.Equal("Ada", page.Rows[0]["Name"]);
 
         IReadOnlyList<CsvImport> imports = await provider.GetRequiredService<IListImportedTablesUseCase>().ExecuteAsync();
-        Assert.Contains(imports, item => item.TableName == "wybrane_osoby" && item.RowCount == 1);
+        Assert.Contains(imports, item => item.TableName == "wybrane_osoby" && item.RowCount == 2);
     }
 
     [Fact]
@@ -64,7 +63,7 @@ public sealed class SqliteTableMaterializerTests
 
         Assert.Equal(1, result.RowCount);
         TablePage page = await provider.GetRequiredService<IBrowseTableUseCase>()
-            .ExecuteAsync(new BrowseTableRequest(result.TableName, 100, 0, null, false, null));
+            .ExecuteAsync(new BrowseTableRequest(result.TableName, 100, 0, null, false));
         Assert.Equal("Ada", page.Rows[0]["Name"]);
     }
 }

@@ -81,6 +81,7 @@ public partial class MainWindow : Window
     private string? _currentWorkspacePath;
     private bool _workspaceSelectionReady;
     private bool _ignoreWorkspaceSelection;
+    private bool _updatingImports;
     private bool _updatingComparisonFiles;
     private bool _handlingDroppedFiles;
     private int _activeImportCount;
@@ -443,6 +444,11 @@ public partial class MainWindow : Window
 
     private async void ImportsListBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
     {
+        if (_updatingImports)
+        {
+            return;
+        }
+
         _selectedImport = ImportsListBox.SelectedItem as CsvImport;
         _suppressModeChange = true;
         WorkspaceModeTabControl.SelectedItem = BrowseTab;
@@ -453,13 +459,20 @@ public partial class MainWindow : Window
         _pageOffset = 0;
         _sortColumn = null;
         _sortDescending = false;
+        UpdateSelectedImportControls();
+        await RefreshSelectedTableAsync();
+    }
+
+    private void UpdateSelectedImportControls()
+    {
         DuplicateColumnComboBox.ItemsSource = _selectedImport?.Columns.Select(column => column.Name).ToArray();
         DuplicateColumnComboBox.SelectedIndex = DuplicateColumnComboBox.Items.Count > 0 ? 0 : -1;
         JoinLeftKeyColumnsComboBox.ItemsSource = _selectedImport?.Columns.Select(column => column.Name).ToArray();
         JoinLeftKeyColumnsComboBox.SelectedIndex = JoinLeftKeyColumnsComboBox.Items.Count > 0 ? 0 : -1;
         UpdateComparisonFiles();
         LeftOutputColumnsTextBox.Text = _selectedImport is null ? string.Empty : string.Join(",", _selectedImport.Columns.Select(column => column.Name));
-        await RefreshSelectedTableAsync();
+        BrowseFileNameText.Text = _selectedImport?.DisplayName ?? "Brak tabel";
+        BrowseFileNameText.ToolTip = _selectedImport?.SourcePath;
     }
 
     private async void WorkspaceModeTabControl_SelectionChanged(object sender, SelectionChangedEventArgs e)
@@ -473,6 +486,15 @@ public partial class MainWindow : Window
 
         if (WorkspaceModeTabControl.SelectedItem == BrowseTab)
         {
+            if (_selectedImport is null && ImportsListBox.Items.OfType<CsvImport>().FirstOrDefault() is { } firstImport)
+            {
+                _updatingImports = true;
+                ImportsListBox.SelectedItem = firstImport;
+                _selectedImport = firstImport;
+                _updatingImports = false;
+                UpdateSelectedImportControls();
+            }
+
             _sqlResultPagingEnabled = false;
             _sqlResultQuery = null;
             _adHocTableName = null;
@@ -958,9 +980,34 @@ public partial class MainWindow : Window
     private async Task RefreshImportsAsync()
     {
         IReadOnlyList<CsvImport> imports = await _listImportedTables.ExecuteAsync();
-        ImportsListBox.ItemsSource = imports;
-        JoinTableComboBox.ItemsSource = imports;
-        UpdateComparisonFiles();
+        Guid? selectedImportId = _selectedImport?.Id;
+        CsvImport? selectedImport = imports.FirstOrDefault(import => import.Id == selectedImportId)
+            ?? imports.FirstOrDefault();
+
+        _updatingImports = true;
+        try
+        {
+            ImportsListBox.ItemsSource = imports;
+            ImportsListBox.SelectedItem = selectedImport;
+            _selectedImport = selectedImport;
+            JoinTableComboBox.ItemsSource = imports;
+        }
+        finally
+        {
+            _updatingImports = false;
+        }
+
+        UpdateSelectedImportControls();
+        if (WorkspaceModeTabControl.SelectedItem == BrowseTab)
+        {
+            _adHocTableName = null;
+            _sqlResultQuery = null;
+            _sqlResultPagingEnabled = false;
+            _pageOffset = 0;
+            _sortColumn = null;
+            _sortDescending = false;
+            await RefreshSelectedTableAsync();
+        }
     }
 
     private async Task RefreshOperationsAsync()
@@ -1364,6 +1411,10 @@ public partial class MainWindow : Window
         string? tableName = _adHocTableName ?? _selectedImport?.TableName;
         if (tableName is null)
         {
+            DataGrid.ItemsSource = null;
+            DataGrid.Columns.Clear();
+            TableTitleText.Text = "Podgląd danych";
+            PageStatusText.Text = "Brak danych";
             ExportResultButton.Visibility = Visibility.Collapsed;
             return;
         }

@@ -192,8 +192,12 @@
                                             <ColumnDefinition Width="*" />
                                             <ColumnDefinition Width="Auto" />
                                         </Grid.ColumnDefinitions>
-                                        <TextBlock Text="Widok tabeli" FontWeight="SemiBold"
-                                                   VerticalAlignment="Center" />
+                                        <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                                            <TextBlock Text="Widok tabeli" FontWeight="SemiBold" VerticalAlignment="Center" />
+                                            <TextBlock x:Name="BrowseFileNameText" Margin="12,0,0,0"
+                                                       Foreground="{StaticResource TextMutedBrush}" VerticalAlignment="Center"
+                                                       Text="Brak tabel" TextTrimming="CharacterEllipsis" />
+                                        </StackPanel>
                                         <Button Grid.Column="1" Content="Odśwież dane"
                                                 MinWidth="112" Click="RefreshTable_Click" />
                                     </Grid>

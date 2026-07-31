@@ -32,6 +32,7 @@ namespace CSVForge.App.Wpf;
 public partial class MainWindow : Window
 {
     private const int PageSize = 200;
+    private const string RowNumberColumnKey = "__csvforge_row_number";
     private static readonly Brush ComparisonAllFilesBrush = CreateFrozenBrush("#DCFCE7");
     private static readonly Brush ComparisonSingleFileBrush = CreateFrozenBrush("#FEE2E2");
     private static readonly Brush[] ComparisonCombinationBrushes =
@@ -834,7 +835,8 @@ public partial class MainWindow : Window
 
         string[] columns = DataGrid.Columns
             .Select(column => column.SortMemberPath)
-            .Where(column => !string.IsNullOrWhiteSpace(column))
+            .Where(column => !string.IsNullOrWhiteSpace(column)
+                && !string.Equals(column, RowNumberColumnKey, StringComparison.Ordinal))
             .Cast<string>()
             .ToArray();
         if (columns.Length == 0)
@@ -1307,7 +1309,7 @@ public partial class MainWindow : Window
             string title = _adHocTableName is null ? _selectedImport!.DisplayName : "Wynik operacji";
             TableTitleText.Text = $"{title} ({page.TotalRows} wierszy)";
             ExportResultButton.Visibility = _adHocTableName is null ? Visibility.Collapsed : Visibility.Visible;
-            ShowRows(page.Columns, ToRows(page));
+            ShowRows(page.Columns, ToRows(page), rowNumberOffset: _pageOffset);
             _totalRows = page.TotalRows;
             PreviousPageButton.IsEnabled = _pageOffset > 0;
             NextPageButton.IsEnabled = _pageOffset + page.Rows.Count < page.TotalRows;
@@ -1331,11 +1333,23 @@ public partial class MainWindow : Window
     private void ShowRows(
         IEnumerable<string> columns,
         IEnumerable<Dictionary<string, string?>> rows,
-        bool allowSorting = true)
+        bool allowSorting = true,
+        long rowNumberOffset = 0)
     {
         DataGrid.ItemsSource = null;
         DataGrid.Columns.Clear();
         DataGrid.CanUserSortColumns = allowSorting;
+
+        DataGrid.Columns.Add(new DataGridTextColumn
+        {
+            Header = "Lp.",
+            SortMemberPath = RowNumberColumnKey,
+            CanUserSort = false,
+            Binding = new Binding($"[{RowNumberColumnKey}]") { Mode = BindingMode.OneWay },
+            Width = new DataGridLength(64),
+            MinWidth = 52,
+            MaxWidth = 90
+        });
 
         foreach (string column in columns)
         {
@@ -1379,7 +1393,13 @@ public partial class MainWindow : Window
             });
         }
 
-        DataGrid.ItemsSource = rows;
+        Dictionary<string, string?>[] numberedRows = rows.ToArray();
+        for (int index = 0; index < numberedRows.Length; index++)
+        {
+            numberedRows[index][RowNumberColumnKey] = (rowNumberOffset + index + 1)
+                .ToString(CultureInfo.InvariantCulture);
+        }
+        DataGrid.ItemsSource = numberedRows;
     }
 
     private async Task ShowColumnFilterAsync(string columnName)
@@ -1507,7 +1527,8 @@ public partial class MainWindow : Window
                 item => item.Key,
                 item => item.Value,
                 StringComparer.OrdinalIgnoreCase)),
-            allowSorting: false);
+            allowSorting: false,
+            rowNumberOffset: _pageOffset);
         PreviousPageButton.IsEnabled = _pageOffset > 0;
         NextPageButton.IsEnabled = _pageOffset + result.Rows.Count < _totalRows;
         long firstRow = result.Rows.Count == 0 ? 0 : _pageOffset + 1;

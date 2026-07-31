@@ -80,6 +80,7 @@ public partial class MainWindow : Window
     private bool _workspaceSelectionReady;
     private bool _ignoreWorkspaceSelection;
     private bool _updatingComparisonFiles;
+    private bool _handlingDroppedFiles;
     private int _activeImportCount;
     private SqlSchemaSnapshot _sqlSchema = SqlSchemaSnapshot.Empty;
     private CompletionWindow? _sqlCompletionWindow;
@@ -222,33 +223,170 @@ public partial class MainWindow : Window
 
         if (dialog.ShowDialog(this) == true)
         {
-            ImportPreviewWindow previewWindow = new(_previewCsv, _importCsv, dialog.FileName)
-            {
-                Owner = this
-            };
-            bool importRegistered = false;
-            previewWindow.ProgressChanged += progress =>
-            {
-                if (!importRegistered)
-                {
-                    importRegistered = true;
-                    _activeImportCount++;
-                }
-                ShowImportProgress(progress);
-            };
+            await ShowImportPreviewAsync(dialog.FileName);
+        }
+    }
 
-            if (previewWindow.ShowDialog() == true && previewWindow.ImportTask is { } importTask)
+    private void FilesDropArea_DragEnter(object sender, DragEventArgs e)
+    {
+        UpdateDropFeedback(e);
+    }
+
+    private void FilesDropArea_DragOver(object sender, DragEventArgs e)
+    {
+        UpdateDropFeedback(e);
+    }
+
+    private void FilesDropArea_DragLeave(object sender, DragEventArgs e)
+    {
+        ResetDropFeedback();
+    }
+
+    private async void FilesDropArea_Drop(object sender, DragEventArgs e)
+    {
+        string[] paths = GetDroppedPaths(e.Data);
+        ResetDropFeedback();
+        e.Handled = true;
+
+        if (_handlingDroppedFiles)
+        {
+            StatusText.Text = "Poczekaj na zakończenie dodawania plików";
+            return;
+        }
+
+        string[] csvPaths = paths
+            .Where(IsCsvFile)
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToArray();
+        string[] rejectedPaths = paths
+            .Where(path => !IsCsvFile(path))
+            .ToArray();
+
+        if (csvPaths.Length == 0)
+        {
+            StatusText.Text = "Nie dodano plików";
+            MessageBox.Show(
+                this,
+                "Upuść co najmniej jeden istniejący plik z rozszerzeniem .csv.",
+                "Nieobsługiwany plik",
+                MessageBoxButton.OK,
+                MessageBoxImage.Warning);
+            return;
+        }
+
+        _handlingDroppedFiles = true;
+        try
+        {
+            foreach (string path in csvPaths)
             {
-                await RefreshImportsAsync();
-                CsvImport? provisionalImport = (ImportsListBox.ItemsSource as IEnumerable<CsvImport>)
-                    ?.FirstOrDefault(item => string.Equals(item.SourcePath, dialog.FileName, StringComparison.OrdinalIgnoreCase));
-                if (provisionalImport is not null)
-                {
-                    SelectImport(provisionalImport.Id);
-                    ExpandFilesPanelToFit(provisionalImport.DisplayName);
-                }
-                _ = TrackBackgroundImportAsync(importTask, importRegistered);
+                StatusText.Text = $"Dodawanie pliku {Path.GetFileName(path)}";
+                await ShowImportPreviewAsync(path);
             }
+
+            if (rejectedPaths.Length > 0)
+            {
+                string rejectedNames = string.Join(
+                    Environment.NewLine,
+                    rejectedPaths.Take(5).Select(path => $"• {Path.GetFileName(path)}"));
+                string more = rejectedPaths.Length > 5
+                    ? $"{Environment.NewLine}…oraz {rejectedPaths.Length - 5} kolejnych"
+                    : string.Empty;
+                MessageBox.Show(
+                    this,
+                    $"Pominięto pliki, które nie są plikami CSV:{Environment.NewLine}{rejectedNames}{more}",
+                    "Niektóre pliki pominięto",
+                    MessageBoxButton.OK,
+                    MessageBoxImage.Warning);
+            }
+        }
+        finally
+        {
+            _handlingDroppedFiles = false;
+        }
+    }
+
+    private void UpdateDropFeedback(DragEventArgs e)
+    {
+        bool canImport = GetDroppedPaths(e.Data).Any(IsCsvFile);
+        e.Effects = canImport ? DragDropEffects.Copy : DragDropEffects.None;
+        e.Handled = true;
+
+        FilesDropArea.SetResourceReference(
+            Border.BackgroundProperty,
+            canImport ? "AccentSoftBrush" : "SurfaceMutedBrush");
+        FilesDropArea.SetResourceReference(
+            Border.BorderBrushProperty,
+            canImport ? "AccentBrush" : "BorderBrush");
+        DropHintText.Text = canImport
+            ? "Upuść, aby dodać pliki CSV jako tabele"
+            : "Można dodać tylko istniejące pliki CSV";
+    }
+
+    private void ResetDropFeedback()
+    {
+        FilesDropArea.SetResourceReference(Border.BackgroundProperty, "SurfaceBrush");
+        FilesDropArea.SetResourceReference(Border.BorderBrushProperty, "BorderBrush");
+        DropHintText.Text = "Upuść tutaj pliki CSV, aby dodać je jako tabele";
+    }
+
+    private static string[] GetDroppedPaths(IDataObject data)
+    {
+        try
+        {
+            if (!data.GetDataPresent(DataFormats.FileDrop, true))
+            {
+                return [];
+            }
+
+            object? droppedData = data.GetData(DataFormats.FileDrop, true);
+            return droppedData switch
+            {
+                string[] paths => paths,
+                IEnumerable<string> paths => paths.ToArray(),
+                _ => []
+            };
+        }
+        catch (Exception ex)
+        {
+            Log.Warning(ex, "Could not read files from a drag-and-drop operation");
+            return [];
+        }
+    }
+
+    private static bool IsCsvFile(string path)
+    {
+        return File.Exists(path)
+            && string.Equals(Path.GetExtension(path), ".csv", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private async Task ShowImportPreviewAsync(string filePath)
+    {
+        ImportPreviewWindow previewWindow = new(_previewCsv, _importCsv, filePath)
+        {
+            Owner = this
+        };
+        bool importRegistered = false;
+        previewWindow.ProgressChanged += progress =>
+        {
+            if (!importRegistered)
+            {
+                importRegistered = true;
+                _activeImportCount++;
+            }
+            ShowImportProgress(progress);
+        };
+
+        if (previewWindow.ShowDialog() == true && previewWindow.ImportTask is { } importTask)
+        {
+            await RefreshImportsAsync();
+            CsvImport? provisionalImport = (ImportsListBox.ItemsSource as IEnumerable<CsvImport>)
+                ?.FirstOrDefault(item => string.Equals(item.SourcePath, filePath, StringComparison.OrdinalIgnoreCase));
+            if (provisionalImport is not null)
+            {
+                SelectImport(provisionalImport.Id);
+                ExpandFilesPanelToFit(provisionalImport.DisplayName);
+            }
+            _ = TrackBackgroundImportAsync(importTask, importRegistered);
         }
     }
 
@@ -342,6 +480,95 @@ public partial class MainWindow : Window
         }
         e.Column.SortDirection = _sortDescending ? ListSortDirection.Descending : ListSortDirection.Ascending;
         await RefreshSelectedTableAsync();
+    }
+
+    private void DataGrid_PreviewKeyDown(object sender, KeyEventArgs e)
+    {
+        if (e.Key == Key.C && Keyboard.Modifiers == ModifierKeys.Control)
+        {
+            e.Handled = CopyCurrentCellValue();
+        }
+    }
+
+    private void DataGrid_PreviewMouseRightButtonDown(object sender, MouseButtonEventArgs e)
+    {
+        DataGridCell? cell = FindVisualParent<DataGridCell>(e.OriginalSource as DependencyObject);
+        if (cell is null)
+        {
+            return;
+        }
+
+        cell.Focus();
+        DataGrid.CurrentCell = new DataGridCellInfo(cell);
+        DataGrid.SelectedCells.Clear();
+        DataGrid.SelectedCells.Add(DataGrid.CurrentCell);
+    }
+
+    private void CopySelectedCell_Click(object sender, RoutedEventArgs e)
+    {
+        CopyCurrentCellValue();
+    }
+
+    private bool CopyCurrentCellValue()
+    {
+        DataGridCellInfo cell = DataGrid.CurrentCell;
+        if (!cell.IsValid && DataGrid.SelectedCells.Count > 0)
+        {
+            cell = DataGrid.SelectedCells[0];
+        }
+
+        if (!cell.IsValid || cell.Item is not IReadOnlyDictionary<string, string?> row)
+        {
+            StatusText.Text = "Najpierw zaznacz komórkę";
+            return false;
+        }
+
+        string columnName = cell.Column.SortMemberPath;
+        if (string.IsNullOrWhiteSpace(columnName))
+        {
+            columnName = cell.Column.Header?.ToString() ?? string.Empty;
+        }
+
+        if (!row.TryGetValue(columnName, out string? value))
+        {
+            StatusText.Text = "Nie udało się odczytać wartości komórki";
+            return false;
+        }
+
+        try
+        {
+            Clipboard.SetText(value ?? string.Empty);
+            StatusText.Text = "Skopiowano wartość komórki";
+            return true;
+        }
+        catch (Exception ex)
+        {
+            Log.Warning(ex, "Could not copy a data grid cell value to the clipboard");
+            StatusText.Text = "Nie udało się skopiować wartości";
+            MessageBox.Show(
+                this,
+                "Schowek jest obecnie niedostępny. Spróbuj ponownie.",
+                "Kopiowanie nie powiodło się",
+                MessageBoxButton.OK,
+                MessageBoxImage.Warning);
+            return true;
+        }
+    }
+
+    private static T? FindVisualParent<T>(DependencyObject? source)
+        where T : DependencyObject
+    {
+        while (source is not null)
+        {
+            if (source is T match)
+            {
+                return match;
+            }
+
+            source = VisualTreeHelper.GetParent(source);
+        }
+
+        return null;
     }
 
     private void DataGrid_LoadingRow(object sender, DataGridRowEventArgs e)

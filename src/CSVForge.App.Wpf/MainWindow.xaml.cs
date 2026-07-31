@@ -2081,7 +2081,7 @@ public partial class MainWindow : Window
             OperationProgressBar.Visibility = Visibility.Visible;
             CancelOperationButton.Visibility = Visibility.Visible;
             await action(_operationCancellation.Token);
-            ShowStatusMessage(successMessage, autoHide: false);
+            StatusOverlay.Visibility = Visibility.Collapsed;
         }
         catch (OperationCanceledException)
         {
@@ -2098,7 +2098,10 @@ public partial class MainWindow : Window
             CancelOperationButton.Visibility = Visibility.Collapsed;
             _operationCancellation.Dispose();
             _operationCancellation = null;
-            ScheduleStatusOverlayHide();
+            if (StatusOverlay.Visibility == Visibility.Visible)
+            {
+                ScheduleStatusOverlayHide();
+            }
         }
     }
 

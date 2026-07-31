@@ -379,8 +379,8 @@
       </DockPanel>
 
       <Border x:Name="StatusOverlay" Panel.ZIndex="100" Visibility="Collapsed"
-              HorizontalAlignment="Center" VerticalAlignment="Bottom" Margin="20"
-              MinWidth="380" MaxWidth="900" Padding="16,10"
+              HorizontalAlignment="Right" VerticalAlignment="Bottom" Margin="20"
+              MinWidth="320" MaxWidth="620" Padding="16,10"
               Background="#F8FAFC" BorderBrush="#CBD5E1" BorderThickness="1" CornerRadius="8">
           <Border.Effect>
               <DropShadowEffect BlurRadius="16" ShadowDepth="2" Opacity="0.22" />

@@ -97,9 +97,6 @@ public partial class MainWindow : Window
     private string? _lastDuplicatesSql;
     private string? _lastCompareSql;
     private string? _lastJoinSql;
-    private bool _duplicatesExecutedInSession;
-    private bool _compareExecutedInSession;
-    private bool _joinExecutedInSession;
     private bool _suppressModeChange;
     private readonly List<AdditionalCompareFileRow> _additionalCompareFiles = [];
     private readonly Dictionary<string, IReadOnlyList<string?>> _columnFilters = new(StringComparer.OrdinalIgnoreCase);
@@ -226,9 +223,6 @@ public partial class MainWindow : Window
 
         WorkspaceStatusText.Text = fullPath;
         _currentWorkspacePath = fullPath;
-        _duplicatesExecutedInSession = false;
-        _compareExecutedInSession = false;
-        _joinExecutedInSession = false;
         SaveRecentWorkspace(fullPath);
         await RefreshImportsAsync();
         await RefreshOperationsAsync();
@@ -517,18 +511,62 @@ public partial class MainWindow : Window
             return;
         }
 
-        if (WorkspaceModeTabControl.SelectedItem == DuplicatesTab && _duplicatesExecutedInSession)
+        ClearOperationResultView();
+        if (WorkspaceModeTabControl.SelectedItem == DuplicatesTab
+            && _selectedImport is not null
+            && SelectedKeyColumns().Count > 0)
         {
             await FindDuplicatesAsync();
         }
-        else if (WorkspaceModeTabControl.SelectedItem == CompareTab && _compareExecutedInSession)
+        else if (WorkspaceModeTabControl.SelectedItem == CompareTab && IsCompareConfigurationReady())
         {
             await CompareTablesAsync();
         }
-        else if (WorkspaceModeTabControl.SelectedItem == JoinTab && _joinExecutedInSession)
+        else if (WorkspaceModeTabControl.SelectedItem == JoinTab && IsJoinConfigurationReady())
         {
             await JoinTablesAsync();
         }
+    }
+
+    private void ClearOperationResultView()
+    {
+        _sqlResultQuery = null;
+        _sqlResultPagingEnabled = false;
+        _adHocTableName = null;
+        _pageOffset = 0;
+        _totalRows = 0;
+        DataGrid.ItemsSource = null;
+        DataGrid.Columns.Clear();
+        PreviousPageButton.IsEnabled = false;
+        NextPageButton.IsEnabled = false;
+        ExportResultButton.Visibility = Visibility.Collapsed;
+        TableTitleText.Text = "Wynik operacji";
+        PageStatusText.Text = "Brak danych";
+    }
+
+    private bool IsCompareConfigurationReady()
+    {
+        if (CompareLeftTableComboBox.SelectedItem is not CsvImport left
+            || CompareTableComboBox.SelectedItem is not CsvImport right)
+        {
+            return false;
+        }
+        IReadOnlyList<string> leftKeys = ParseColumns(CompareLeftKeyColumnsComboBox.Text);
+        if (leftKeys.Count == 0 || RightKeyColumns().Count != leftKeys.Count) return false;
+        CsvImport[] files = [left, right, .. _additionalCompareFiles.Select(row => row.FileComboBox.SelectedItem).OfType<CsvImport>()];
+        return files.Length == _additionalCompareFiles.Count + 2
+            && files.Select(file => file.Id).Distinct().Count() == files.Length
+            && _additionalCompareFiles.All(row => ParseColumns(row.KeysComboBox.Text).Count == leftKeys.Count);
+    }
+
+    private bool IsJoinConfigurationReady()
+    {
+        if (_selectedImport is null || JoinTableComboBox.SelectedItem is not CsvImport right) return false;
+        IReadOnlyList<string> leftKeys = ParseColumns(JoinLeftKeyColumnsComboBox.Text);
+        IReadOnlyList<string> rightKeys = ParseColumns(JoinRightKeyColumnsTextBox.Text);
+        return leftKeys.Count > 0
+            && rightKeys.Count == leftKeys.Count
+            && rightKeys.All(key => right.Columns.Any(column => string.Equals(column.Name, key, StringComparison.OrdinalIgnoreCase)));
     }
 
     private async void RefreshTable_Click(object sender, RoutedEventArgs e)
@@ -799,7 +837,6 @@ public partial class MainWindow : Window
                 IgnoreEmptyKeysCheckBox.IsChecked == true));
 
             _lastDuplicatesSql = result.Sql;
-            _duplicatesExecutedInSession = true;
             await ShowOperationResultAsync(result, "Wynik duplikatów");
             await RefreshOperationsAsync();
         }, "Duplikaty gotowe");
@@ -857,7 +894,6 @@ public partial class MainWindow : Window
                 SelectedEnum(CompareModeComboBox, DatasetCompareMode.AllWithStatus)));
 
             _lastCompareSql = result.Sql;
-            _compareExecutedInSession = true;
             _sortColumn = leftKeys[0];
             _sortDescending = false;
             await ShowOperationResultAsync(result, "Wynik porównania");
@@ -906,7 +942,6 @@ public partial class MainWindow : Window
                 SelectedEnum(JoinTypeComboBox, DatasetJoinType.Left)));
 
             _lastJoinSql = result.Sql;
-            _joinExecutedInSession = true;
             await ShowOperationResultAsync(result, "Wynik połączenia");
             await RefreshOperationsAsync();
         }, "Połączenie gotowe");

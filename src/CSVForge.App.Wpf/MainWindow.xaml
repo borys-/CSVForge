@@ -354,10 +354,10 @@
                                   PreviewMouseRightButtonDown="DataGrid_PreviewMouseRightButtonDown"
                                   EnableRowVirtualization="True"
                                   EnableColumnVirtualization="True"
-                                  AutomationProperties.HelpText="Zaznacz komórkę i naciśnij Control+C, aby skopiować jej wartość.">
+                                  AutomationProperties.HelpText="Zaznacz jedną lub wiele komórek i naciśnij Control+C, aby skopiować ich wartości.">
                             <DataGrid.ContextMenu>
                                 <ContextMenu>
-                                    <MenuItem Header="Kopiuj wartość komórki"
+                                    <MenuItem Header="Kopiuj zaznaczone komórki"
                                               InputGestureText="Ctrl+C"
                                               Click="CopySelectedCell_Click" />
                                 </ContextMenu>

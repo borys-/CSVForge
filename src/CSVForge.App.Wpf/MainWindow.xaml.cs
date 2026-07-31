@@ -499,9 +499,13 @@ public partial class MainWindow : Window
         }
 
         cell.Focus();
-        DataGrid.CurrentCell = new DataGridCellInfo(cell);
-        DataGrid.SelectedCells.Clear();
-        DataGrid.SelectedCells.Add(DataGrid.CurrentCell);
+        DataGridCellInfo clickedCell = new(cell);
+        DataGrid.CurrentCell = clickedCell;
+        if (!DataGrid.SelectedCells.Contains(clickedCell))
+        {
+            DataGrid.SelectedCells.Clear();
+            DataGrid.SelectedCells.Add(clickedCell);
+        }
     }
 
     private void CopySelectedCell_Click(object sender, RoutedEventArgs e)
@@ -511,34 +515,71 @@ public partial class MainWindow : Window
 
     private bool CopyCurrentCellValue()
     {
-        DataGridCellInfo cell = DataGrid.CurrentCell;
-        if (!cell.IsValid && DataGrid.SelectedCells.Count > 0)
+        List<DataGridCellInfo> selectedCells = DataGrid.SelectedCells
+            .Where(cell => cell.IsValid)
+            .ToList();
+        if (selectedCells.Count == 0 && DataGrid.CurrentCell.IsValid)
         {
-            cell = DataGrid.SelectedCells[0];
+            selectedCells.Add(DataGrid.CurrentCell);
         }
 
-        if (!cell.IsValid || cell.Item is not IReadOnlyDictionary<string, string?> row)
+        if (selectedCells.Count == 0)
         {
-            StatusText.Text = "Najpierw zaznacz komórkę";
+            StatusText.Text = "Najpierw zaznacz co najmniej jedną komórkę";
             return false;
         }
 
-        string columnName = cell.Column.SortMemberPath;
-        if (string.IsNullOrWhiteSpace(columnName))
+        var cells = selectedCells
+            .Select(cell => new
+            {
+                Cell = cell,
+                RowIndex = DataGrid.Items.IndexOf(cell.Item),
+                ColumnIndex = cell.Column.DisplayIndex
+            })
+            .Where(item => item.RowIndex >= 0)
+            .OrderBy(item => item.RowIndex)
+            .ThenBy(item => item.ColumnIndex)
+            .ToArray();
+        if (cells.Length == 0)
         {
-            columnName = cell.Column.Header?.ToString() ?? string.Empty;
+            StatusText.Text = "Nie udało się odczytać zaznaczenia";
+            return false;
         }
 
-        if (!row.TryGetValue(columnName, out string? value))
+        int firstColumn = cells.Min(item => item.ColumnIndex);
+        int lastColumn = cells.Max(item => item.ColumnIndex);
+        List<string> clipboardRows = [];
+        foreach (var rowCells in cells.GroupBy(item => item.RowIndex))
         {
-            StatusText.Text = "Nie udało się odczytać wartości komórki";
-            return false;
+            Dictionary<int, string> valuesByColumn = [];
+            foreach (var selected in rowCells)
+            {
+                if (selected.Cell.Item is not IReadOnlyDictionary<string, string?> row)
+                {
+                    continue;
+                }
+
+                string columnName = selected.Cell.Column.SortMemberPath;
+                if (string.IsNullOrWhiteSpace(columnName)
+                    || !row.TryGetValue(columnName, out string? value))
+                {
+                    continue;
+                }
+                valuesByColumn[selected.ColumnIndex] = FormatClipboardValue(value);
+            }
+
+            clipboardRows.Add(string.Join(
+                '\t',
+                Enumerable.Range(firstColumn, lastColumn - firstColumn + 1)
+                    .Select(column => valuesByColumn.GetValueOrDefault(column, string.Empty))));
         }
 
         try
         {
-            Clipboard.SetText(value ?? string.Empty);
-            StatusText.Text = "Skopiowano wartość komórki";
+            Clipboard.SetText(string.Join(Environment.NewLine, clipboardRows));
+            StatusText.Text = cells.Length == 1
+                ? "Skopiowano wartość komórki"
+                : $"Skopiowano komórki: {cells.Length:N0}";
             return true;
         }
         catch (Exception ex)
@@ -553,6 +594,14 @@ public partial class MainWindow : Window
                 MessageBoxImage.Warning);
             return true;
         }
+    }
+
+    private static string FormatClipboardValue(string? value)
+    {
+        string text = value ?? string.Empty;
+        return text.IndexOfAny(['\t', '\r', '\n', '"']) < 0
+            ? text
+            : $"\"{text.Replace("\"", "\"\"")}\"";
     }
 
     private static T? FindVisualParent<T>(DependencyObject? source)

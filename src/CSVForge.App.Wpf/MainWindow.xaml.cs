@@ -85,7 +85,7 @@ public partial class MainWindow : Window
     private bool _updatingImports;
     private bool _updatingComparisonFiles;
     private bool _handlingDroppedFiles;
-    private FilesPanelMode _filesPanelMode = FilesPanelMode.AutoHide;
+    private FilesPanelMode _filesPanelMode = FilesPanelMode.Expanded;
     private double _expandedFilesPanelWidth = 300;
     private int _activeImportCount;
     private SqlSchemaSnapshot _sqlSchema = SqlSchemaSnapshot.Empty;
@@ -1204,25 +1204,6 @@ public partial class MainWindow : Window
     private void SetFilesPanelExpanded_Click(object sender, RoutedEventArgs e) =>
         SetFilesPanelMode(FilesPanelMode.Expanded);
 
-    private void SetFilesPanelAutoHide_Click(object sender, RoutedEventArgs e) =>
-        SetFilesPanelMode(FilesPanelMode.AutoHide);
-
-    private void FilesPanel_MouseEnter(object sender, MouseEventArgs e)
-    {
-        if (_filesPanelMode == FilesPanelMode.AutoHide)
-        {
-            ShowFilesPanelContent(true);
-        }
-    }
-
-    private void FilesPanel_MouseLeave(object sender, MouseEventArgs e)
-    {
-        if (_filesPanelMode == FilesPanelMode.AutoHide)
-        {
-            ShowFilesPanelContent(false);
-        }
-    }
-
     private void SetFilesPanelMode(FilesPanelMode mode, bool persist = true)
     {
         if (_filesPanelMode == FilesPanelMode.Expanded && FilesPanelColumn.ActualWidth >= 240)
@@ -1231,8 +1212,7 @@ public partial class MainWindow : Window
         }
 
         _filesPanelMode = mode;
-        bool showContent = mode == FilesPanelMode.Expanded
-            || mode == FilesPanelMode.AutoHide && FilesDropArea.IsMouseOver;
+        bool showContent = mode == FilesPanelMode.Expanded;
         ShowFilesPanelContent(showContent);
         UpdateFilesPanelModeButtons();
         if (persist)
@@ -1259,7 +1239,6 @@ public partial class MainWindow : Window
     {
         CollapseFilesPanelButton.Opacity = _filesPanelMode == FilesPanelMode.Collapsed ? 1 : 0.55;
         ExpandFilesPanelButton.Opacity = _filesPanelMode == FilesPanelMode.Expanded ? 1 : 0.55;
-        AutoHideFilesPanelButton.Opacity = _filesPanelMode == FilesPanelMode.AutoHide ? 1 : 0.55;
     }
 
     private void LoadFilesPanelPreferences()
@@ -2202,8 +2181,7 @@ public partial class MainWindow : Window
     private enum FilesPanelMode
     {
         Collapsed,
-        Expanded,
-        AutoHide
+        Expanded
     }
 
     private sealed record UiPreferences(string FilesPanelMode, double ExpandedFilesPanelWidth);

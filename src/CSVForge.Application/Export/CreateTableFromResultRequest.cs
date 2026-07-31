@@ -5,4 +5,5 @@ public sealed record CreateTableFromResultRequest(
     string TargetTableName,
     IReadOnlyList<string> Columns,
     string? TextFilter = null,
-    string? SourceSql = null);
+    string? SourceSql = null,
+    IReadOnlyDictionary<string, IReadOnlyList<string?>>? ColumnFilters = null);

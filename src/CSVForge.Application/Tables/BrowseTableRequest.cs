@@ -6,4 +6,5 @@ public sealed record BrowseTableRequest(
     int Offset,
     string? SortColumn,
     bool SortDescending,
-    string? TextFilter);
+    string? TextFilter,
+    IReadOnlyDictionary<string, IReadOnlyList<string?>>? ColumnFilters = null);

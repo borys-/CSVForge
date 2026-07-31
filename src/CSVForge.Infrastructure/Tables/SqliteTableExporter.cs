@@ -66,18 +66,13 @@ internal sealed class SqliteTableExporter(IWorkspaceContext workspaceContext) : 
         }
         SqliteIdentifierGuard.Columns(columns);
         await using SqliteCommand command = connection.CreateCommand();
-        string whereClause = string.IsNullOrWhiteSpace(request.TextFilter)
-            ? string.Empty
-            : " WHERE " + string.Join(" OR ", tableColumns.Select(column => $"{CsvImportNameHelper.QuoteIdentifier(column)} LIKE $filter"));
+        string whereClause = SqliteExportFilterBuilder.Build(
+            command, request.TextFilter, tableColumns, request.ColumnFilters);
         string projection = string.Join(", ", columns.Select(CsvImportNameHelper.QuoteIdentifier));
         string source = string.IsNullOrWhiteSpace(request.SourceSql)
             ? CsvImportNameHelper.QuoteIdentifier(request.TableName)
             : $"({NormalizeSql(request.SourceSql)}) AS _sql_result";
         command.CommandText = $"SELECT {projection} FROM {source}{whereClause};";
-        if (!string.IsNullOrWhiteSpace(request.TextFilter))
-        {
-            command.Parameters.AddWithValue("$filter", $"%{request.TextFilter}%");
-        }
         await using SqliteDataReader reader = await command.ExecuteReaderAsync(cancellationToken);
         await using StreamWriter writer = new(temporaryPath, false, new UTF8Encoding(encoderShouldEmitUTF8Identifier: true));
         string delimiter = request.Delimiter.ToString();

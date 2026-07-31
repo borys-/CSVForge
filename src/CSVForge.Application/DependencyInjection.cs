@@ -14,6 +14,7 @@ public static class DependencyInjection
         services.AddScoped<IPreviewCsvUseCase, PreviewCsvUseCase>();
         services.AddScoped<IListImportedTablesUseCase, ListImportedTablesUseCase>();
         services.AddScoped<IBrowseTableUseCase, BrowseTableUseCase>();
+        services.AddScoped<IGetColumnValuesUseCase, GetColumnValuesUseCase>();
         services.AddScoped<IFindDuplicatesUseCase, FindDuplicatesUseCase>();
         services.AddScoped<ICompareDatasetsUseCase, CompareDatasetsUseCase>();
         services.AddScoped<IJoinDatasetsUseCase, JoinDatasetsUseCase>();

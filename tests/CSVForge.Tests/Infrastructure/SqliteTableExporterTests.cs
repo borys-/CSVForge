@@ -140,4 +140,35 @@ public sealed class SqliteTableExporterTests
         Assert.Contains("Ola", content);
         Assert.DoesNotContain("Ada", content);
     }
+
+    [Fact]
+    public async Task ExportTableUseCase_AppliesColumnFilters()
+    {
+        string directory = Path.Combine(Path.GetTempPath(), "CSVForge.Tests", Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(directory);
+        string workspacePath = Path.Combine(directory, "workspace.db");
+        string inputPath = Path.Combine(directory, "input.csv");
+        string outputPath = Path.Combine(directory, "output.csv");
+        await File.WriteAllTextAsync(inputPath, "Name;Status\r\nAda;Aktywny\r\nOla;Nieaktywny\r\n");
+        ServiceProvider provider = new ServiceCollection().AddApplication().AddInfrastructure().BuildServiceProvider();
+        await provider.GetRequiredService<ICreateWorkspaceUseCase>().ExecuteAsync(workspacePath);
+        ImportResult import = await provider.GetRequiredService<IImportCsvUseCase>()
+            .ExecuteAsync(new ImportRequest(inputPath, "Input", true, null, null));
+
+        ExportResult result = await provider.GetRequiredService<IExportTableUseCase>()
+            .ExecuteAsync(new ExportTableRequest(
+                import.Import.TableName,
+                outputPath,
+                ';',
+                true,
+                ColumnFilters: new Dictionary<string, IReadOnlyList<string?>>
+                {
+                    ["Status"] = ["Aktywny"]
+                }));
+
+        Assert.Equal(1, result.ExportedRows);
+        string content = await File.ReadAllTextAsync(outputPath);
+        Assert.Contains("Ada", content);
+        Assert.DoesNotContain("Ola", content);
+    }
 }

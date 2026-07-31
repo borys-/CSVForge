@@ -1562,10 +1562,7 @@ public partial class MainWindow : Window
 
         foreach (string column in columns)
         {
-            object headerContent = column;
-            if (_sqlResultQuery is null)
-            {
-                Grid header = new();
+            Grid header = new();
                 header.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
                 header.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
                 TextBlock label = new() { Text = column, VerticalAlignment = VerticalAlignment.Center, TextTrimming = TextTrimming.CharacterEllipsis };
@@ -1583,11 +1580,9 @@ public partial class MainWindow : Window
                 Grid.SetColumn(filterButton, 1);
                 header.Children.Add(label);
                 header.Children.Add(filterButton);
-                headerContent = header;
-            }
             DataGrid.Columns.Add(new DataGridTextColumn
             {
-                Header = headerContent,
+                Header = header,
                 SortMemberPath = column,
                 SortDirection = string.Equals(_sortColumn, column, StringComparison.OrdinalIgnoreCase)
                     ? _sortDescending
@@ -1613,19 +1608,37 @@ public partial class MainWindow : Window
     private async Task ShowColumnFilterAsync(string columnName)
     {
         string? tableName = _adHocTableName ?? _selectedImport?.TableName;
-        if (tableName is null || _sqlResultQuery is not null) return;
+        if (tableName is null && _sqlResultQuery is null) return;
 
         await RunUiActionAsync(async cancellationToken =>
         {
-            IReadOnlyList<ColumnValueOption> values = await _getColumnValues.ExecuteAsync(
-                new ColumnValuesRequest(tableName, columnName, _columnFilters), cancellationToken);
+            IReadOnlyList<ColumnValueOption> values;
+            if (_sqlResultQuery is not null)
+            {
+                string sourceSql = NormalizeSqlForSubquery(_sqlResultQuery);
+                string otherFilters = BuildSqlColumnFilterClause(_columnFilters, columnName);
+                string quotedColumn = SqlCompletionService.QuoteIdentifier(columnName);
+                SqlQueryResult valueResult = await _executeSql.ExecuteAsync($"SELECT {quotedColumn} AS FilterValue, COUNT(*) AS ValueCount FROM ({sourceSql}) AS _result{otherFilters} GROUP BY {quotedColumn} ORDER BY {quotedColumn} LIMIT 500;", cancellationToken);
+                values = valueResult.Rows.Select(row => new ColumnValueOption(
+                    row.GetValueOrDefault("FilterValue"),
+                    long.TryParse(row.GetValueOrDefault("ValueCount"), NumberStyles.Integer, CultureInfo.InvariantCulture, out long count) ? count : 0)).ToArray();
+            }
+            else
+            {
+                values = await _getColumnValues.ExecuteAsync(new ColumnValuesRequest(tableName!, columnName, _columnFilters), cancellationToken);
+            }
             _columnFilters.TryGetValue(columnName, out IReadOnlyList<string?>? selectedValues);
             ColumnFilterWindow dialog = new(columnName, values, selectedValues) { Owner = this };
             if (dialog.ShowDialog() != true) return;
             if (dialog.ClearFilter || dialog.SelectedValues.Count == dialog.TotalValueCount) _columnFilters.Remove(columnName);
             else _columnFilters[columnName] = dialog.SelectedValues;
             _pageOffset = 0;
-            await RefreshSelectedTableAsync();
+            if (_sqlResultQuery is not null)
+            {
+                _sqlResultPagingEnabled = true;
+                await RefreshSqlResultPageAsync(refreshTotalRows: true);
+            }
+            else await RefreshSelectedTableAsync();
         }, "Filtr zastosowany");
     }
 
@@ -1699,10 +1712,11 @@ public partial class MainWindow : Window
         }
 
         string sourceSql = NormalizeSqlForSubquery(_sqlResultQuery);
+        string whereClause = BuildSqlColumnFilterClause(_columnFilters);
         if (refreshTotalRows)
         {
             SqlQueryResult count = await _executeSql.ExecuteAsync(
-                $"SELECT COUNT(*) AS TotalRows FROM ({sourceSql}) AS _result;");
+                $"SELECT COUNT(*) AS TotalRows FROM ({sourceSql}) AS _result{whereClause};");
             string? total = count.Rows.FirstOrDefault()?.GetValueOrDefault("TotalRows");
             _totalRows = long.TryParse(total, NumberStyles.Integer, CultureInfo.InvariantCulture, out long parsed)
                 ? parsed
@@ -1715,6 +1729,7 @@ public partial class MainWindow : Window
         SqlQueryResult result = await _executeSql.ExecuteAsync($"""
             SELECT *
             FROM ({sourceSql}) AS _result
+            {whereClause}
             {orderBy}
             LIMIT {PageSize} OFFSET {_pageOffset};
             """);
@@ -1742,6 +1757,23 @@ public partial class MainWindow : Window
             normalized = normalized[..^1].TrimEnd();
         }
         return normalized;
+    }
+
+    private static string BuildSqlColumnFilterClause(
+        IReadOnlyDictionary<string, IReadOnlyList<string?>> filters,
+        string? excludedColumn = null)
+    {
+        List<string> predicates = [];
+        foreach ((string column, IReadOnlyList<string?> values) in filters)
+        {
+            if (string.Equals(column, excludedColumn, StringComparison.OrdinalIgnoreCase)) continue;
+            if (values.Count == 0) { predicates.Add("0 = 1"); continue; }
+            string quotedColumn = SqlCompletionService.QuoteIdentifier(column);
+            predicates.Add("(" + string.Join(" OR ", values.Select(value => value is null
+                ? $"{quotedColumn} IS NULL"
+                : $"CAST({quotedColumn} AS TEXT) = '{value.Replace("'", "''")}'")) + ")");
+        }
+        return predicates.Count == 0 ? string.Empty : " WHERE " + string.Join(" AND ", predicates);
     }
 
     private async void SqlEditor_PreviewKeyDown(object sender, KeyEventArgs e)
@@ -1853,6 +1885,8 @@ public partial class MainWindow : Window
         await RunUiActionAsync(async cancellationToken =>
         {
             SqlQueryResult result = await _executeSql.ExecuteAsync(SqlQueryTextBox.Text, cancellationToken);
+            _columnFilters.Clear();
+            _columnFilterTableName = null;
             ShowRows(
                 result.Columns,
                 result.Rows.Select(row => row.ToDictionary(item => item.Key, item => item.Value, StringComparer.OrdinalIgnoreCase)),

@@ -88,6 +88,10 @@ public partial class MainWindow : Window
     private string? _sqlResultQuery;
     private bool _sqlResultPagingEnabled;
     private string _sqlResultTitle = "Wynik operacji";
+    private string? _lastDuplicatesSql;
+    private string? _lastCompareSql;
+    private string? _lastJoinSql;
+    private bool _suppressModeChange;
     private readonly List<AdditionalCompareFileRow> _additionalCompareFiles = [];
     private readonly Dictionary<string, IReadOnlyList<string?>> _columnFilters = new(StringComparer.OrdinalIgnoreCase);
     private string? _columnFilterTableName;
@@ -132,6 +136,7 @@ public partial class MainWindow : Window
         _getSqlSchema = getSqlSchema;
 
         InitializeComponent();
+        WorkspaceModeTabControl.SelectionChanged += WorkspaceModeTabControl_SelectionChanged;
         InitializeSqlEditor();
         _startupWorkspacePath = LoadRecentWorkspaces();
         Loaded += MainWindow_Loaded;
@@ -438,7 +443,9 @@ public partial class MainWindow : Window
     private async void ImportsListBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
     {
         _selectedImport = ImportsListBox.SelectedItem as CsvImport;
+        _suppressModeChange = true;
         WorkspaceModeTabControl.SelectedItem = BrowseTab;
+        _suppressModeChange = false;
         _adHocTableName = null;
         _sqlResultQuery = null;
         _sqlResultPagingEnabled = false;
@@ -452,6 +459,44 @@ public partial class MainWindow : Window
         UpdateComparisonFiles();
         LeftOutputColumnsTextBox.Text = _selectedImport is null ? string.Empty : string.Join(",", _selectedImport.Columns.Select(column => column.Name));
         await RefreshSelectedTableAsync();
+    }
+
+    private async void WorkspaceModeTabControl_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (_suppressModeChange
+            || !_workspaceSelectionReady
+            || !ReferenceEquals(e.Source, WorkspaceModeTabControl))
+        {
+            return;
+        }
+
+        if (WorkspaceModeTabControl.SelectedItem == BrowseTab)
+        {
+            _sqlResultPagingEnabled = false;
+            _sqlResultQuery = null;
+            _adHocTableName = null;
+            _pageOffset = 0;
+            await RefreshSelectedTableAsync();
+            return;
+        }
+
+        (string? Sql, string Title) operation = WorkspaceModeTabControl.SelectedItem switch
+        {
+            var tab when tab == DuplicatesTab => (_lastDuplicatesSql, "Wynik duplikatów"),
+            var tab when tab == CompareTab => (_lastCompareSql, "Wynik porównania"),
+            var tab when tab == JoinTab => (_lastJoinSql, "Wynik połączenia"),
+            _ => (null, string.Empty)
+        };
+        if (string.IsNullOrWhiteSpace(operation.Sql))
+        {
+            return;
+        }
+
+        await RunUiActionAsync(
+            () => ShowOperationResultAsync(
+                OperationResult.OkQuery(operation.Sql, operation.Title),
+                operation.Title),
+            "Wynik operacji gotowy");
     }
 
     private async void RefreshTable_Click(object sender, RoutedEventArgs e)
@@ -719,6 +764,7 @@ public partial class MainWindow : Window
                 SelectedEnum(DuplicateModeComboBox, DuplicateSearchMode.AllDuplicateRows),
                 IgnoreEmptyKeysCheckBox.IsChecked == true));
 
+            _lastDuplicatesSql = result.Sql;
             await ShowOperationResultAsync(result, "Wynik duplikatów");
             await RefreshOperationsAsync();
         }, "Duplikaty gotowe");
@@ -773,6 +819,7 @@ public partial class MainWindow : Window
                 sources,
                 SelectedEnum(CompareModeComboBox, DatasetCompareMode.AllWithStatus)));
 
+            _lastCompareSql = result.Sql;
             _sortColumn = leftKeys[0];
             _sortDescending = false;
             await ShowOperationResultAsync(result, "Wynik porównania");
@@ -818,6 +865,7 @@ public partial class MainWindow : Window
                 ParseColumns(RightOutputColumnsTextBox.Text),
                 SelectedEnum(JoinTypeComboBox, DatasetJoinType.Left)));
 
+            _lastJoinSql = result.Sql;
             await ShowOperationResultAsync(result, "Wynik połączenia");
             await RefreshOperationsAsync();
         }, "Połączenie gotowe");
@@ -916,8 +964,19 @@ public partial class MainWindow : Window
 
     private async Task RefreshOperationsAsync()
     {
-        OperationsListBox.ItemsSource = await _listOperations.ExecuteAsync();
+        IReadOnlyList<WorkspaceOperation> operations = await _listOperations.ExecuteAsync();
+        OperationsListBox.ItemsSource = operations;
+        _lastDuplicatesSql = LatestOperationSql(operations, "duplicates");
+        _lastCompareSql = LatestOperationSql(operations, "compare");
+        _lastJoinSql = LatestOperationSql(operations, "join");
     }
+
+    private static string? LatestOperationSql(
+        IEnumerable<WorkspaceOperation> operations,
+        string operationType) =>
+        operations.FirstOrDefault(operation =>
+            string.Equals(operation.OperationType, operationType, StringComparison.OrdinalIgnoreCase)
+            && !string.IsNullOrWhiteSpace(operation.SourceSql))?.SourceSql;
 
     private async void OperationsListBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
     {

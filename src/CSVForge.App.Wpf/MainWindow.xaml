@@ -192,7 +192,7 @@
                                     </Grid>
                                 </TabItem>
 
-                                <TabItem Header="Duplikaty">
+                                <TabItem x:Name="DuplicatesTab" Header="Duplikaty">
                                     <Grid Margin="8">
                                         <Grid.RowDefinitions>
                                             <RowDefinition Height="Auto" />
@@ -218,7 +218,7 @@
                                     </Grid>
                                 </TabItem>
 
-                                <TabItem Header="Porównaj">
+                                <TabItem x:Name="CompareTab" Header="Porównaj">
                                     <Grid Margin="8">
                                         <Grid.RowDefinitions>
                                             <RowDefinition Height="Auto" />
@@ -264,7 +264,7 @@
                                     </Grid>
                                 </TabItem>
 
-                                <TabItem Header="Połącz">
+                                <TabItem x:Name="JoinTab" Header="Połącz">
                                     <Grid Margin="8">
                                         <Grid.RowDefinitions>
                                             <RowDefinition Height="Auto" />
@@ -305,7 +305,7 @@
                                     </Grid>
                                 </TabItem>
 
-                                <TabItem Header="SQL">
+                                <TabItem x:Name="SqlTab" Header="SQL">
                                     <Grid Margin="8">
                                         <Grid.RowDefinitions>
                                             <RowDefinition Height="Auto" />

@@ -242,8 +242,7 @@
                                             <ColumnDefinition Width="Auto" />
                                             <ColumnDefinition Width="*" />
                                             <ColumnDefinition Width="Auto" />
-                                            <ColumnDefinition Width="220" />
-                                            <ColumnDefinition Width="Auto" />
+                                            <ColumnDefinition Width="Auto" MinWidth="244" />
                                         </Grid.ColumnDefinitions>
                                         <TextBlock Text="Plik 1" VerticalAlignment="Center" />
                                         <ComboBox x:Name="CompareLeftTableComboBox" Grid.Column="1" Height="30" Margin="10,0,18,6"
@@ -251,7 +250,7 @@
                                                   HorizontalContentAlignment="Stretch"
                                                   SelectionChanged="CompareLeftTableComboBox_SelectionChanged" />
                                         <TextBlock Grid.Column="2" Text="Klucze pliku 1" VerticalAlignment="Center" />
-                                        <ComboBox x:Name="CompareLeftKeyColumnsComboBox" Grid.Column="3" Grid.ColumnSpan="2" Height="30" Margin="10,0,0,6"
+                                        <ComboBox x:Name="CompareLeftKeyColumnsComboBox" Grid.Column="3" Height="30" Margin="10,0,0,6"
                                                   IsEditable="True" SelectionChanged="CompareLeftKeyColumnsComboBox_SelectionChanged"
                                                   ToolTip="Wybierz jedną kolumnę lub wpisz kilka nazw oddzielonych przecinkami" />
                                         <TextBlock Grid.Row="1" Text="Plik 2" VerticalAlignment="Center" />
@@ -260,16 +259,16 @@
                                                   HorizontalContentAlignment="Stretch"
                                                   SelectionChanged="CompareTableComboBox_SelectionChanged" />
                                         <TextBlock Grid.Row="1" Grid.Column="2" Text="Klucze pliku 2" VerticalAlignment="Center" />
-                                        <ComboBox x:Name="RightKeyColumnsTextBox" Grid.Row="1" Grid.Column="3" Grid.ColumnSpan="2" Height="30" Margin="10,0,0,6"
+                                        <ComboBox x:Name="RightKeyColumnsTextBox" Grid.Row="1" Grid.Column="3" Height="30" Margin="10,0,0,6"
                                                   IsEditable="True" ToolTip="Wybierz jedną kolumnę lub wpisz kilka nazw oddzielonych przecinkami" />
-                                        <StackPanel x:Name="AdditionalCompareFilesPanel" Grid.Row="2" Grid.ColumnSpan="5" />
+                                        <StackPanel x:Name="AdditionalCompareFilesPanel" Grid.Row="2" Grid.ColumnSpan="4" />
                                         <TextBlock Grid.Row="3" Text="Wynik" VerticalAlignment="Center" />
-                                        <ComboBox x:Name="CompareModeComboBox" Grid.Row="3" Grid.Column="1" Height="30" Margin="10,4,18,0" SelectedIndex="0">
+                                        <ComboBox x:Name="CompareModeComboBox" Grid.Row="3" Grid.Column="1" Grid.ColumnSpan="2" Height="30" Margin="10,4,18,0" SelectedIndex="0">
                                             <ComboBoxItem Content="Wszystko ze statusem" Tag="AllWithStatus" />
                                             <ComboBoxItem Content="We wszystkich plikach" Tag="CommonRows" />
                                             <ComboBoxItem Content="Nieobecne w części plików" Tag="DifferentRows" />
                                         </ComboBox>
-                                        <StackPanel Grid.Row="3" Grid.Column="3" Grid.ColumnSpan="2" Orientation="Horizontal" HorizontalAlignment="Right" Margin="10,4,0,0">
+                                        <StackPanel Grid.Row="3" Grid.Column="3" Orientation="Horizontal" HorizontalAlignment="Right" Margin="10,4,0,0">
                                             <Button Content="+ Dodaj plik" MinWidth="104" Margin="0,0,8,0" Click="AddCompareFile_Click" />
                                             <Button Content="Porównaj pliki" Style="{StaticResource PrimaryButton}" MinWidth="132" Click="CompareTables_Click" />
                                         </StackPanel>

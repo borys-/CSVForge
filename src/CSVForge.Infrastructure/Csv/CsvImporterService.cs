@@ -39,6 +39,7 @@ internal sealed class CsvImporterService(IWorkspaceContext workspaceContext) : I
         {
             CsvImport import = await ImportRowsAsync(connection, request, encoding, delimiter, progress, cancellationToken);
             IReadOnlyList<ImportError> errors = await ReadErrorsAsync(connection, import.Id, cancellationToken);
+            await SqliteDatabaseMaintenance.OptimizeAsync(connection, CancellationToken.None);
             return new ImportResult(import, errors);
         }
         catch

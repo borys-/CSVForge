@@ -16,7 +16,9 @@ public sealed class DeleteImportTests
         Directory.CreateDirectory(directory);
         string workspacePath = Path.Combine(directory, "workspace.db");
         string csvPath = Path.Combine(directory, "data.csv");
-        await File.WriteAllTextAsync(csvPath, "Id\r\n1\r\n");
+        await File.WriteAllLinesAsync(
+            csvPath,
+            ["Id;Payload", .. Enumerable.Range(1, 5_000).Select(index => $"{index};{new string('x', 200)}")]);
         ServiceProvider provider = new ServiceCollection().AddApplication().AddInfrastructure().BuildServiceProvider();
         await provider.GetRequiredService<ICreateWorkspaceUseCase>().ExecuteAsync(workspacePath);
         ImportResult import = await provider.GetRequiredService<IImportCsvUseCase>()
@@ -31,5 +33,9 @@ public sealed class DeleteImportTests
         command.CommandText = "SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name = $name;";
         command.Parameters.AddWithValue("$name", import.Import.TableName);
         Assert.Equal(0L, (long)(await command.ExecuteScalarAsync() ?? 0L));
+
+        command.Parameters.Clear();
+        command.CommandText = "PRAGMA freelist_count;";
+        Assert.Equal(0L, (long)(await command.ExecuteScalarAsync() ?? -1L));
     }
 }

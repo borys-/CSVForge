@@ -151,26 +151,26 @@ public partial class MainWindow : Window
 
     private async void WorkspacePathTextBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
     {
-        if (!_workspaceSelectionReady || _ignoreWorkspaceSelection || WorkspacePathTextBox.SelectedItem is not string selected)
+        if (!_workspaceSelectionReady || _ignoreWorkspaceSelection || WorkspacePathTextBox.SelectedItem is not WorkspaceChoice selected)
         {
             return;
         }
 
-        if (selected == CreateNewWorkspaceItem)
+        if (selected.IsCreateNew)
         {
             RestoreWorkspaceSelection();
             await CreateNewWorkspaceAsync();
             return;
         }
 
-        if (string.Equals(selected, _currentWorkspacePath, StringComparison.OrdinalIgnoreCase))
+        if (string.Equals(selected.FullPath, _currentWorkspacePath, StringComparison.OrdinalIgnoreCase))
         {
             return;
         }
 
         string? previousPath = _currentWorkspacePath;
-        await RunUiActionAsync(() => OpenWorkspaceAsync(selected), "Workspace gotowy");
-        if (!string.Equals(_currentWorkspacePath, selected, StringComparison.OrdinalIgnoreCase))
+        await RunUiActionAsync(() => OpenWorkspaceAsync(selected.FullPath), "Workspace gotowy");
+        if (!string.Equals(_currentWorkspacePath, selected.FullPath, StringComparison.OrdinalIgnoreCase))
         {
             SelectWorkspace(previousPath ?? _startupWorkspacePath);
         }
@@ -202,7 +202,7 @@ public partial class MainWindow : Window
     private async Task OpenWorkspaceAsync(string path)
     {
         string fullPath = Path.GetFullPath(path);
-        WorkspacePathTextBox.Text = fullPath;
+        WorkspacePathTextBox.ToolTip = fullPath;
 
         if (File.Exists(fullPath))
         {
@@ -2013,8 +2013,9 @@ public partial class MainWindow : Window
     private void SaveRecentWorkspace(string path)
     {
         string fullPath = Path.GetFullPath(path);
-        string[] existing = (WorkspacePathTextBox.ItemsSource as IEnumerable<string> ?? [])
-            .Where(item => item != CreateNewWorkspaceItem)
+        string[] existing = (WorkspacePathTextBox.ItemsSource as IEnumerable<WorkspaceChoice> ?? [])
+            .Where(item => !item.IsCreateNew)
+            .Select(item => item.FullPath)
             .Where(item => !string.Equals(item, fullPath, StringComparison.OrdinalIgnoreCase))
             .Prepend(fullPath)
             .Take(10)
@@ -2027,21 +2028,35 @@ public partial class MainWindow : Window
     private void SetWorkspaceItems(IEnumerable<string> paths, string selectedPath)
     {
         _ignoreWorkspaceSelection = true;
-        WorkspacePathTextBox.ItemsSource = paths.Append(CreateNewWorkspaceItem).ToArray();
-        WorkspacePathTextBox.SelectedItem = selectedPath;
+        WorkspaceChoice[] choices =
+        [
+            .. paths.Select(path => new WorkspaceChoice(path)),
+            new WorkspaceChoice(CreateNewWorkspaceItem, true)
+        ];
+        WorkspacePathTextBox.ItemsSource = choices;
+        WorkspacePathTextBox.SelectedItem = choices.FirstOrDefault(item =>
+            !item.IsCreateNew && string.Equals(item.FullPath, selectedPath, StringComparison.OrdinalIgnoreCase));
+        WorkspacePathTextBox.ToolTip = selectedPath;
         _ignoreWorkspaceSelection = false;
     }
 
     private void SelectWorkspace(string path)
     {
         _ignoreWorkspaceSelection = true;
-        WorkspacePathTextBox.SelectedItem = path;
+        WorkspacePathTextBox.SelectedItem = (WorkspacePathTextBox.ItemsSource as IEnumerable<WorkspaceChoice>)?
+            .FirstOrDefault(item => !item.IsCreateNew && string.Equals(item.FullPath, path, StringComparison.OrdinalIgnoreCase));
+        WorkspacePathTextBox.ToolTip = path;
         _ignoreWorkspaceSelection = false;
     }
 
     private void RestoreWorkspaceSelection()
     {
         SelectWorkspace(_currentWorkspacePath ?? _startupWorkspacePath);
+    }
+
+    private sealed record WorkspaceChoice(string FullPath, bool IsCreateNew = false)
+    {
+        public string DisplayName => IsCreateNew ? FullPath : Path.GetFileName(FullPath);
     }
 
     private sealed record AdditionalCompareFileRow(

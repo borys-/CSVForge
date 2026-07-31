@@ -35,7 +35,14 @@
                 </StackPanel>
                 <TextBlock x:Name="WorkspaceStatusText" Grid.Column="1" Visibility="Collapsed" />
                 <ComboBox x:Name="WorkspacePathTextBox" Grid.Column="2" Width="320" Height="34" Margin="0,0,8,0"
-                          VerticalContentAlignment="Center" SelectionChanged="WorkspacePathTextBox_SelectionChanged" ToolTip="Aktywny workspace" />
+                          IsEditable="True" IsReadOnly="True" TextSearch.TextPath="DisplayName"
+                          VerticalContentAlignment="Center" SelectionChanged="WorkspacePathTextBox_SelectionChanged" ToolTip="Aktywny workspace">
+                    <ComboBox.ItemTemplate>
+                        <DataTemplate>
+                            <TextBlock Text="{Binding FullPath}" ToolTip="{Binding FullPath}" TextTrimming="CharacterEllipsis" />
+                        </DataTemplate>
+                    </ComboBox.ItemTemplate>
+                </ComboBox>
                 <Button Grid.Column="3" Content="Logi" Style="{StaticResource ToolbarButton}" Margin="0,0,8,0" Click="OpenLogs_Click" />
                 <Button Grid.Column="4" Content="O programie" Style="{StaticResource ToolbarButton}" Click="ShowAbout_Click" />
             </Grid>

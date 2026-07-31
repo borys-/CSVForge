@@ -165,6 +165,7 @@
         </Style>
         <Style TargetType="DataGridCell">
             <Setter Property="Padding" Value="4,0" />
+            <Setter Property="VerticalContentAlignment" Value="Center" />
             <Setter Property="BorderThickness" Value="0" />
         </Style>
     </Application.Resources>

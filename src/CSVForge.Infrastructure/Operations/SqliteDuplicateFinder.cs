@@ -46,7 +46,8 @@ internal sealed class SqliteDuplicateFinder(IWorkspaceContext workspaceContext) 
             FROM {CsvImportNameHelper.QuoteIdentifier(tableName)}
             {emptyFilter}
             GROUP BY {keyColumnsSql}
-            HAVING COUNT(*) > 1;
+            HAVING COUNT(*) > 1
+            ORDER BY {keyColumnsSql};
             """;
     }
 
@@ -64,7 +65,7 @@ internal sealed class SqliteDuplicateFinder(IWorkspaceContext workspaceContext) 
                 HAVING COUNT(*) > 1
             ) AS duplicates
             ON {BuildJoinPredicate("source", "duplicates", keyColumnsSql)}
-            ;
+            ORDER BY {string.Join(", ", keyColumnsSql.Split(", ").Select(column => $"source.{column}"))}, source.rowid;
             """;
     }
 

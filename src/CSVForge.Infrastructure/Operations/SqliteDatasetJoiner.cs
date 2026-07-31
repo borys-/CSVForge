@@ -62,7 +62,11 @@ internal sealed class SqliteDatasetJoiner(IWorkspaceContext workspaceContext) : 
             _ => throw new ArgumentOutOfRangeException(nameof(request), request.JoinType, "Unsupported join type.")
         };
 
-        return $"SELECT {projection} FROM {fromClause};";
+        string orderBy = string.Join(", ", request.LeftJoinColumns.Zip(
+            request.RightJoinColumns,
+            (leftColumn, rightColumn) =>
+                $"l.{CsvImportNameHelper.QuoteIdentifier(leftColumn)}, r.{CsvImportNameHelper.QuoteIdentifier(rightColumn)}"));
+        return $"SELECT {projection} FROM {fromClause} ORDER BY {orderBy};";
     }
 
     private static string BuildProjection(DatasetJoinRequest request)

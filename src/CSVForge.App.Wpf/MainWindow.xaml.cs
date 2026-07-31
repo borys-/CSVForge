@@ -85,6 +85,8 @@ public partial class MainWindow : Window
     private SqlSchemaSnapshot _sqlSchema = SqlSchemaSnapshot.Empty;
     private CompletionWindow? _sqlCompletionWindow;
     private string? _sqlResultQuery;
+    private bool _sqlResultPagingEnabled;
+    private string _sqlResultTitle = "Wynik operacji";
     private readonly List<AdditionalCompareFileRow> _additionalCompareFiles = [];
     private readonly Dictionary<string, IReadOnlyList<string?>> _columnFilters = new(StringComparer.OrdinalIgnoreCase);
     private string? _columnFilterTableName;
@@ -438,6 +440,7 @@ public partial class MainWindow : Window
         WorkspaceModeTabControl.SelectedItem = BrowseTab;
         _adHocTableName = null;
         _sqlResultQuery = null;
+        _sqlResultPagingEnabled = false;
         _pageOffset = 0;
         _sortColumn = null;
         _sortDescending = false;
@@ -936,6 +939,7 @@ public partial class MainWindow : Window
 
         _adHocTableName = operation.ResultTableName;
         _sqlResultQuery = null;
+        _sqlResultPagingEnabled = false;
         _pageOffset = 0;
         await RefreshSelectedTableAsync();
     }
@@ -962,6 +966,7 @@ public partial class MainWindow : Window
             if (string.Equals(_sqlResultQuery, operation.SourceSql, StringComparison.Ordinal))
             {
                 _sqlResultQuery = null;
+                _sqlResultPagingEnabled = false;
                 DataGrid.ItemsSource = null;
             }
             await RefreshOperationsAsync();
@@ -1266,7 +1271,16 @@ public partial class MainWindow : Window
 
     private async Task RefreshSelectedTableAsync()
     {
+        if (_sqlResultPagingEnabled && !string.IsNullOrWhiteSpace(_sqlResultQuery))
+        {
+            await RunUiActionAsync(
+                () => RefreshSqlResultPageAsync(refreshTotalRows: false),
+                "Dane odświeżone");
+            return;
+        }
+
         _sqlResultQuery = null;
+        _sqlResultPagingEnabled = false;
         string? tableName = _adHocTableName ?? _selectedImport?.TableName;
         if (tableName is null)
         {
@@ -1454,7 +1468,39 @@ public partial class MainWindow : Window
         }
 
         ShowGeneratedSql(operation);
-        SqlQueryResult result = await _executeSql.ExecuteAsync(operation.Sql);
+        _adHocTableName = null;
+        _sqlResultQuery = operation.Sql;
+        _sqlResultPagingEnabled = true;
+        _sqlResultTitle = title;
+        _columnFilters.Clear();
+        _pageOffset = 0;
+        ExportResultButton.Visibility = Visibility.Visible;
+        await RefreshSqlResultPageAsync(refreshTotalRows: true);
+    }
+
+    private async Task RefreshSqlResultPageAsync(bool refreshTotalRows)
+    {
+        if (string.IsNullOrWhiteSpace(_sqlResultQuery))
+        {
+            return;
+        }
+
+        string sourceSql = NormalizeSqlForSubquery(_sqlResultQuery);
+        if (refreshTotalRows)
+        {
+            SqlQueryResult count = await _executeSql.ExecuteAsync(
+                $"SELECT COUNT(*) AS TotalRows FROM ({sourceSql}) AS _result;");
+            string? total = count.Rows.FirstOrDefault()?.GetValueOrDefault("TotalRows");
+            _totalRows = long.TryParse(total, NumberStyles.Integer, CultureInfo.InvariantCulture, out long parsed)
+                ? parsed
+                : 0;
+        }
+
+        SqlQueryResult result = await _executeSql.ExecuteAsync($"""
+            SELECT *
+            FROM ({sourceSql}) AS _result
+            LIMIT {PageSize} OFFSET {_pageOffset};
+            """);
         ShowRows(
             result.Columns,
             result.Rows.Select(row => row.ToDictionary(
@@ -1462,16 +1508,22 @@ public partial class MainWindow : Window
                 item => item.Value,
                 StringComparer.OrdinalIgnoreCase)),
             allowSorting: false);
-        _adHocTableName = null;
-        _sqlResultQuery = operation.Sql;
-        _columnFilters.Clear();
-        _pageOffset = 0;
-        _totalRows = result.Rows.Count;
-        PreviousPageButton.IsEnabled = false;
-        NextPageButton.IsEnabled = false;
-        ExportResultButton.Visibility = Visibility.Visible;
-        TableTitleText.Text = $"{title} ({result.Rows.Count:N0} wierszy)";
-        PageStatusText.Text = $"{result.Rows.Count:N0} wierszy";
+        PreviousPageButton.IsEnabled = _pageOffset > 0;
+        NextPageButton.IsEnabled = _pageOffset + result.Rows.Count < _totalRows;
+        long firstRow = result.Rows.Count == 0 ? 0 : _pageOffset + 1;
+        long lastRow = _pageOffset + result.Rows.Count;
+        TableTitleText.Text = $"{_sqlResultTitle} ({_totalRows:N0} wierszy)";
+        PageStatusText.Text = $"{firstRow:N0}-{lastRow:N0} z {_totalRows:N0}";
+    }
+
+    private static string NormalizeSqlForSubquery(string sql)
+    {
+        string normalized = sql.Trim();
+        while (normalized.EndsWith(';'))
+        {
+            normalized = normalized[..^1].TrimEnd();
+        }
+        return normalized;
     }
 
     private async void SqlEditor_PreviewKeyDown(object sender, KeyEventArgs e)
@@ -1591,6 +1643,7 @@ public partial class MainWindow : Window
             if (result.Columns.Count > 0)
             {
                 _sqlResultQuery = SqlQueryTextBox.Text;
+                _sqlResultPagingEnabled = false;
                 ExportResultButton.Visibility = Visibility.Visible;
                 SqlStatusText.Text = $"Zwrócono {result.Rows.Count:N0} wierszy";
                 TableTitleText.Text = $"Wynik SQL ({result.Rows.Count:N0} wierszy)";
@@ -1598,6 +1651,7 @@ public partial class MainWindow : Window
             else
             {
                 _sqlResultQuery = null;
+                _sqlResultPagingEnabled = false;
                 ExportResultButton.Visibility = Visibility.Collapsed;
                 SqlStatusText.Text = result.AffectedRows >= 0
                     ? $"Polecenie wykonane. Zmienione wiersze: {result.AffectedRows:N0}"

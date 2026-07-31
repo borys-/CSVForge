@@ -76,6 +76,7 @@ internal sealed class SqliteDatasetComparer(IWorkspaceContext workspaceContext) 
             DatasetCompareMode.AllWithStatus => string.Empty,
             _ => throw new ArgumentOutOfRangeException(nameof(request), request.Mode, "Nieobsługiwany tryb porównania.")
         };
+        string orderBy = string.Join(", ", outputColumns.Select(column => $"k.{Quote(column)}"));
 
         return $"""
             WITH all_keys AS (
@@ -85,7 +86,8 @@ internal sealed class SqliteDatasetComparer(IWorkspaceContext workspaceContext) 
                    {presenceColumns},
                    {status} AS {Quote(StatusColumn)}
             FROM all_keys AS k
-            {filter};
+            {filter}
+            ORDER BY {orderBy};
             """;
     }
 

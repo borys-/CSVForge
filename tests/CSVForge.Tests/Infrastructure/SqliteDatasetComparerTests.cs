@@ -41,8 +41,16 @@ public sealed class SqliteDatasetComparerTests
                 DatasetCompareMode.AllWithStatus));
 
         var page = await provider.GetRequiredService<IExecuteSqlUseCase>().ExecuteAsync(result.Sql!);
+        string sourceSql = result.Sql!.Trim().TrimEnd(';');
+        var count = await provider.GetRequiredService<IExecuteSqlUseCase>()
+            .ExecuteAsync($"SELECT COUNT(*) AS TotalRows FROM ({sourceSql}) AS _result;");
+        var secondPage = await provider.GetRequiredService<IExecuteSqlUseCase>()
+            .ExecuteAsync($"SELECT * FROM ({sourceSql}) AS _result LIMIT 1 OFFSET 1;");
 
         Assert.Equal(3, page.Rows.Count);
+        Assert.Equal("3", count.Rows.Single()["TotalRows"]);
+        Assert.Single(secondPage.Rows);
+        Assert.Equal("b@example.com", secondPage.Rows[0]["Email"]);
         Assert.Contains(page.Rows, row => row["Email"] == "a@example.com" && row["status_porównania"] == "We wszystkich plikach");
         Assert.Contains(page.Rows, row => row["Email"] == "b@example.com" && row["status_porównania"] == "Tylko w: plik 1");
         Assert.Contains(page.Rows, row => row["Email"] == "c@example.com" && row["status_porównania"] == "Tylko w: plik 2");

@@ -37,6 +37,29 @@ public sealed class SqliteSqlExecutorTests
         Assert.Equal("test", query.Rows.Single()["value"]);
     }
 
+    [Fact]
+    public async Task ExecuteSqlUseCase_ReturnsMoreThanTenThousandRows()
+    {
+        ServiceProvider provider = await CreateProviderAsync();
+
+        SqlQueryResult result = await provider.GetRequiredService<IExecuteSqlUseCase>().ExecuteAsync("""
+            WITH digits(d) AS (
+                VALUES (0), (1), (2), (3), (4), (5), (6), (7), (8), (9)
+            )
+            SELECT
+                a.d + b.d * 10 + c.d * 100 + d.d * 1000 + e.d * 10000 AS Id
+            FROM digits AS a
+            CROSS JOIN digits AS b
+            CROSS JOIN digits AS c
+            CROSS JOIN digits AS d
+            CROSS JOIN digits AS e
+            LIMIT 10050;
+            """);
+
+        Assert.Equal(10_050, result.Rows.Count);
+        Assert.False(result.WasTruncated);
+    }
+
     private static async Task<ServiceProvider> CreateProviderAsync()
     {
         string workspacePath = Path.Combine(

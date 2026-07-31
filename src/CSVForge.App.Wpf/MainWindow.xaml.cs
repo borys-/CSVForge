@@ -1470,9 +1470,8 @@ public partial class MainWindow : Window
         PreviousPageButton.IsEnabled = false;
         NextPageButton.IsEnabled = false;
         ExportResultButton.Visibility = Visibility.Visible;
-        string suffix = result.WasTruncated ? " — pokazano pierwsze 10 000" : string.Empty;
-        TableTitleText.Text = $"{title} ({result.Rows.Count:N0} wierszy{suffix})";
-        PageStatusText.Text = $"{result.Rows.Count:N0} wierszy{suffix}";
+        TableTitleText.Text = $"{title} ({result.Rows.Count:N0} wierszy)";
+        PageStatusText.Text = $"{result.Rows.Count:N0} wierszy";
     }
 
     private async void SqlEditor_PreviewKeyDown(object sender, KeyEventArgs e)
@@ -1593,8 +1592,7 @@ public partial class MainWindow : Window
             {
                 _sqlResultQuery = SqlQueryTextBox.Text;
                 ExportResultButton.Visibility = Visibility.Visible;
-                string suffix = result.WasTruncated ? " — pokazano pierwsze 10 000" : string.Empty;
-                SqlStatusText.Text = $"Zwrócono {result.Rows.Count:N0} wierszy{suffix}";
+                SqlStatusText.Text = $"Zwrócono {result.Rows.Count:N0} wierszy";
                 TableTitleText.Text = $"Wynik SQL ({result.Rows.Count:N0} wierszy)";
             }
             else

@@ -7,8 +7,6 @@ namespace CSVForge.Infrastructure.Sqlite;
 
 internal sealed class SqliteSqlExecutor(IWorkspaceContext workspaceContext) : ISqlExecutor
 {
-    private const int MaxResultRows = 10_000;
-
     public async Task<SqlQueryResult> ExecuteAsync(string sql, CancellationToken cancellationToken)
     {
         if (workspaceContext.CurrentWorkspacePath is null)
@@ -24,7 +22,6 @@ internal sealed class SqliteSqlExecutor(IWorkspaceContext workspaceContext) : IS
         await using SqliteDataReader reader = await command.ExecuteReaderAsync(cancellationToken);
         List<string> columns = [];
         List<IReadOnlyDictionary<string, string?>> rows = [];
-        bool truncated = false;
 
         do
         {
@@ -37,12 +34,6 @@ internal sealed class SqliteSqlExecutor(IWorkspaceContext workspaceContext) : IS
             rows = [];
             while (await reader.ReadAsync(cancellationToken))
             {
-                if (rows.Count >= MaxResultRows)
-                {
-                    truncated = true;
-                    break;
-                }
-
                 Dictionary<string, string?> row = new(StringComparer.OrdinalIgnoreCase);
                 for (int index = 0; index < columns.Count; index++)
                 {
@@ -53,8 +44,8 @@ internal sealed class SqliteSqlExecutor(IWorkspaceContext workspaceContext) : IS
                 rows.Add(row);
             }
         }
-        while (!truncated && await reader.NextResultAsync(cancellationToken));
+        while (await reader.NextResultAsync(cancellationToken));
 
-        return new SqlQueryResult(columns, rows, reader.RecordsAffected, truncated);
+        return new SqlQueryResult(columns, rows, reader.RecordsAffected, false);
     }
 }

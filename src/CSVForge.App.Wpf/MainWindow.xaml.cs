@@ -97,6 +97,9 @@ public partial class MainWindow : Window
     private string? _lastDuplicatesSql;
     private string? _lastCompareSql;
     private string? _lastJoinSql;
+    private bool _duplicatesExecutedInSession;
+    private bool _compareExecutedInSession;
+    private bool _joinExecutedInSession;
     private bool _suppressModeChange;
     private readonly List<AdditionalCompareFileRow> _additionalCompareFiles = [];
     private readonly Dictionary<string, IReadOnlyList<string?>> _columnFilters = new(StringComparer.OrdinalIgnoreCase);
@@ -223,6 +226,9 @@ public partial class MainWindow : Window
 
         WorkspaceStatusText.Text = fullPath;
         _currentWorkspacePath = fullPath;
+        _duplicatesExecutedInSession = false;
+        _compareExecutedInSession = false;
+        _joinExecutedInSession = false;
         SaveRecentWorkspace(fullPath);
         await RefreshImportsAsync();
         await RefreshOperationsAsync();
@@ -511,23 +517,18 @@ public partial class MainWindow : Window
             return;
         }
 
-        (string? Sql, string Title) operation = WorkspaceModeTabControl.SelectedItem switch
+        if (WorkspaceModeTabControl.SelectedItem == DuplicatesTab && _duplicatesExecutedInSession)
         {
-            var tab when tab == DuplicatesTab => (_lastDuplicatesSql, "Wynik duplikatów"),
-            var tab when tab == CompareTab => (_lastCompareSql, "Wynik porównania"),
-            var tab when tab == JoinTab => (_lastJoinSql, "Wynik połączenia"),
-            _ => (null, string.Empty)
-        };
-        if (string.IsNullOrWhiteSpace(operation.Sql))
-        {
-            return;
+            await FindDuplicatesAsync();
         }
-
-        await RunUiActionAsync(
-            () => ShowOperationResultAsync(
-                OperationResult.OkQuery(operation.Sql, operation.Title),
-                operation.Title),
-            "Wynik operacji gotowy");
+        else if (WorkspaceModeTabControl.SelectedItem == CompareTab && _compareExecutedInSession)
+        {
+            await CompareTablesAsync();
+        }
+        else if (WorkspaceModeTabControl.SelectedItem == JoinTab && _joinExecutedInSession)
+        {
+            await JoinTablesAsync();
+        }
     }
 
     private async void RefreshTable_Click(object sender, RoutedEventArgs e)
@@ -773,7 +774,9 @@ public partial class MainWindow : Window
         await RefreshSelectedTableAsync();
     }
 
-    private async void FindDuplicates_Click(object sender, RoutedEventArgs e)
+    private async void FindDuplicates_Click(object sender, RoutedEventArgs e) => await FindDuplicatesAsync();
+
+    private async Task FindDuplicatesAsync()
     {
         IReadOnlyList<string> keyColumns = SelectedKeyColumns();
         if (_selectedImport is null)
@@ -796,12 +799,15 @@ public partial class MainWindow : Window
                 IgnoreEmptyKeysCheckBox.IsChecked == true));
 
             _lastDuplicatesSql = result.Sql;
+            _duplicatesExecutedInSession = true;
             await ShowOperationResultAsync(result, "Wynik duplikatów");
             await RefreshOperationsAsync();
         }, "Duplikaty gotowe");
     }
 
-    private async void CompareTables_Click(object sender, RoutedEventArgs e)
+    private async void CompareTables_Click(object sender, RoutedEventArgs e) => await CompareTablesAsync();
+
+    private async Task CompareTablesAsync()
     {
         IReadOnlyList<string> leftKeys = ParseColumns(CompareLeftKeyColumnsComboBox.Text);
         IReadOnlyList<string> rightKeys = RightKeyColumns();
@@ -851,6 +857,7 @@ public partial class MainWindow : Window
                 SelectedEnum(CompareModeComboBox, DatasetCompareMode.AllWithStatus)));
 
             _lastCompareSql = result.Sql;
+            _compareExecutedInSession = true;
             _sortColumn = leftKeys[0];
             _sortDescending = false;
             await ShowOperationResultAsync(result, "Wynik porównania");
@@ -858,7 +865,9 @@ public partial class MainWindow : Window
         }, "Porównanie gotowe");
     }
 
-    private async void JoinTables_Click(object sender, RoutedEventArgs e)
+    private async void JoinTables_Click(object sender, RoutedEventArgs e) => await JoinTablesAsync();
+
+    private async Task JoinTablesAsync()
     {
         IReadOnlyList<string> rightKeys = ParseColumns(JoinRightKeyColumnsTextBox.Text);
         if (_selectedImport is null)
@@ -897,6 +906,7 @@ public partial class MainWindow : Window
                 SelectedEnum(JoinTypeComboBox, DatasetJoinType.Left)));
 
             _lastJoinSql = result.Sql;
+            _joinExecutedInSession = true;
             await ShowOperationResultAsync(result, "Wynik połączenia");
             await RefreshOperationsAsync();
         }, "Połączenie gotowe");

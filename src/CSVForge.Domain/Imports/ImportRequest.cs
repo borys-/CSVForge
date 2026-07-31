@@ -8,4 +8,7 @@ public sealed record ImportRequest(
     string? EncodingName,
     int BatchSize = 5000,
     bool AutoDetectHeader = false,
-    IReadOnlyList<CsvColumnMapping>? ColumnMappings = null);
+    IReadOnlyList<CsvColumnMapping>? ColumnMappings = null,
+    string? SourcePath = null,
+    string? StagingDatabasePath = null,
+    string? StagingTableName = null);

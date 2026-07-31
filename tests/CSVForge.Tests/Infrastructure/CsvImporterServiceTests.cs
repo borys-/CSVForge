@@ -1,6 +1,8 @@
 using System.Text;
 using CSVForge.Application;
 using CSVForge.Application.Abstractions;
+using CSVForge.Application.Ports;
+using CSVForge.Application.Tables;
 using CSVForge.Domain.Imports;
 using CSVForge.Infrastructure;
 using Microsoft.Data.Sqlite;
@@ -289,6 +291,49 @@ public sealed class CsvImporterServiceTests
         Assert.Equal(42L, valueReader.GetInt64(0));
         Assert.Equal(12.5, valueReader.GetDouble(1));
         Assert.Equal(1L, valueReader.GetInt64(2));
+    }
+
+    [Fact]
+    public async Task ImportCsvUseCase_UsesOriginalSourcePathForStagedFile()
+    {
+        (ServiceProvider provider, string stagedPath) = await CreateWorkspaceAndCsvAsync("Id;Name\r\n1;Ada\r\n");
+        string originalPath = Path.Combine(Path.GetDirectoryName(stagedPath)!, "incoming", "report.csv");
+
+        ImportResult result = await provider.GetRequiredService<IImportCsvUseCase>().ExecuteAsync(
+            new ImportRequest(stagedPath, "Report", true, null, null, SourcePath: originalPath));
+
+        Assert.Equal(originalPath, result.Import.SourcePath);
+        IReadOnlyList<CsvImport> imports = await provider.GetRequiredService<IListImportedTablesUseCase>().ExecuteAsync();
+        Assert.Equal(originalPath, Assert.Single(imports).SourcePath);
+    }
+
+    [Fact]
+    public async Task ImportCsvUseCase_PromotesPreparedSqliteTableWithoutReparsingChangedCsv()
+    {
+        (ServiceProvider provider, string csvPath) = await CreateWorkspaceAndCsvAsync("Id;Name\r\n1;Ada\r\n2;Ola\r\n");
+        ICsvStagingService stagingService = provider.GetRequiredService<ICsvStagingService>();
+        CsvStagingResult staging = await stagingService.StageAsync(
+            new ImportRequest(csvPath, "Prepared", true, null, null, AutoDetectHeader: true), CancellationToken.None);
+        await File.WriteAllTextAsync(csvPath, "Id;Name\r\n9;Changed\r\n");
+
+        ImportResult result = await provider.GetRequiredService<IImportCsvUseCase>().ExecuteAsync(new ImportRequest(
+            csvPath,
+            "Promoted",
+            true,
+            null,
+            null,
+            AutoDetectHeader: true,
+            ColumnMappings: staging.Preview.Columns.Select(column => new CsvColumnMapping(column.Index, column.Name, CsvColumnDataType.Text)).ToArray(),
+            StagingDatabasePath: staging.DatabasePath,
+            StagingTableName: staging.TableName));
+
+        Assert.Equal(2, result.Import.RowCount);
+        TablePage page = await provider.GetRequiredService<IBrowseTableUseCase>().ExecuteAsync(
+            new BrowseTableRequest(result.Import.TableName, 10, 0, null, false));
+        Assert.Equal("Ada", page.Rows[0]["Name"]);
+        Assert.Equal("Ola", page.Rows[1]["Name"]);
+        SqliteConnection.ClearAllPools();
+        File.Delete(staging.DatabasePath);
     }
 
     private static async Task<(ServiceProvider Provider, string CsvPath)> CreateWorkspaceAndCsvAsync(string content)

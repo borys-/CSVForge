@@ -16,6 +16,7 @@ public static class DependencyInjection
         services.AddSingleton<IWorkspaceService, SqliteWorkspaceService>();
         services.AddSingleton<ICsvReader, CsvReaderService>();
         services.AddSingleton<ICsvImporter, CsvImporterService>();
+        services.AddSingleton<ICsvStagingService, SqliteCsvStagingService>();
         services.AddSingleton<ITableBrowser, SqliteTableBrowser>();
         services.AddSingleton<IDuplicateFinder, SqliteDuplicateFinder>();
         services.AddSingleton<IDatasetComparer, SqliteDatasetComparer>();

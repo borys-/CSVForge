@@ -35,6 +35,14 @@ internal sealed class CsvImporterService(IWorkspaceContext workspaceContext) : I
         await using SqliteConnection connection = SqliteConnectionFactory.Create(workspaceContext.CurrentWorkspacePath);
         await connection.OpenAsync(cancellationToken);
 
+        if (!string.IsNullOrWhiteSpace(request.StagingDatabasePath)
+            && !string.IsNullOrWhiteSpace(request.StagingTableName)
+            && File.Exists(request.StagingDatabasePath)
+            && (request.ColumnMappings is null || request.ColumnMappings.Where(item => item.Include).All(item => item.DataType == CsvColumnDataType.Text)))
+        {
+            return await PromoteStagedTableAsync(connection, request, cancellationToken);
+        }
+
         try
         {
             CsvImport import = await ImportRowsAsync(connection, request, encoding, delimiter, progress, cancellationToken);
@@ -47,6 +55,68 @@ internal sealed class CsvImporterService(IWorkspaceContext workspaceContext) : I
             await DropUnregisteredImportTablesAsync(connection);
             throw;
         }
+    }
+
+    private static async Task<ImportResult> PromoteStagedTableAsync(
+        SqliteConnection connection,
+        ImportRequest request,
+        CancellationToken cancellationToken)
+    {
+        SqliteIdentifierGuard.Table(request.StagingTableName!);
+        await using SqliteConnection stagingConnection = SqliteConnectionFactory.Create(request.StagingDatabasePath!);
+        await stagingConnection.OpenAsync(cancellationToken);
+        List<string> sourceColumns = [];
+        await using (SqliteCommand schema = stagingConnection.CreateCommand())
+        {
+            schema.CommandText = $"PRAGMA table_info({CsvImportNameHelper.QuoteIdentifier(request.StagingTableName!)});";
+            await using SqliteDataReader reader = await schema.ExecuteReaderAsync(cancellationToken);
+            while (await reader.ReadAsync(cancellationToken)) sourceColumns.Add(reader.GetString(1));
+        }
+        IReadOnlyList<CsvColumnMapping> mappings = ResolveMappings(request.ColumnMappings, sourceColumns);
+        string[] outputColumns = CsvImportNameHelper.NormalizeColumns(mappings.Select(item => item.Name).ToArray()).ToArray();
+        string tableName = CsvImportNameHelper.CreateTableName(request.DisplayName);
+        await CreateImportTableAsync(connection, tableName, outputColumns, mappings, cancellationToken);
+
+        await using (SqliteCommand attach = connection.CreateCommand())
+        {
+            attach.CommandText = "ATTACH DATABASE $stagingPath AS csvforge_staging;";
+            attach.Parameters.AddWithValue("$stagingPath", request.StagingDatabasePath!);
+            await attach.ExecuteNonQueryAsync(cancellationToken);
+        }
+        long rowCount;
+        try
+        {
+            string projection = string.Join(", ", mappings.Select(item => CsvImportNameHelper.QuoteIdentifier(sourceColumns[item.SourceIndex])));
+            await using SqliteCommand copy = connection.CreateCommand();
+            copy.CommandText = $"INSERT INTO {CsvImportNameHelper.QuoteIdentifier(tableName)} SELECT {projection} FROM csvforge_staging.{CsvImportNameHelper.QuoteIdentifier(request.StagingTableName!)};";
+            rowCount = await copy.ExecuteNonQueryAsync(cancellationToken);
+        }
+        catch
+        {
+            await using SqliteCommand drop = connection.CreateCommand();
+            drop.CommandText = $"DROP TABLE IF EXISTS {CsvImportNameHelper.QuoteIdentifier(tableName)};";
+            await drop.ExecuteNonQueryAsync(CancellationToken.None);
+            throw;
+        }
+        finally
+        {
+            await using SqliteCommand detach = connection.CreateCommand();
+            detach.CommandText = "DETACH DATABASE csvforge_staging;";
+            await detach.ExecuteNonQueryAsync(CancellationToken.None);
+        }
+
+        Guid importId = Guid.NewGuid();
+        CsvImport import = new(
+            importId,
+            request.DisplayName,
+            request.SourcePath ?? request.FilePath,
+            tableName,
+            DateTimeOffset.UtcNow,
+            rowCount,
+            mappings.Select((mapping, index) => new CsvColumn(sourceColumns[mapping.SourceIndex], outputColumns[index], index)).ToArray());
+        await SaveMetadataAsync(connection, import, cancellationToken);
+        await SqliteDatabaseMaintenance.OptimizeAsync(connection, CancellationToken.None);
+        return new ImportResult(import, []);
     }
 
     private static async Task<CsvImport> ImportRowsAsync(
@@ -108,7 +178,7 @@ internal sealed class CsvImporterService(IWorkspaceContext workspaceContext) : I
         CsvImport CreateImport(long count) => new(
             importId,
             request.DisplayName,
-            request.FilePath,
+            request.SourcePath ?? request.FilePath,
             tableName,
             importedAt,
             count,

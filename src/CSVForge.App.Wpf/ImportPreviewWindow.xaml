@@ -101,6 +101,7 @@
             <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
                 <ProgressBar x:Name="ImportProgressBar" Width="140" Height="8" IsIndeterminate="True" Visibility="Collapsed" />
                 <TextBlock x:Name="OperationStatusText" Margin="10,0,0,0" VerticalAlignment="Center" Foreground="#52606D" />
+                <CheckBox x:Name="WatchFolderCheckBox" Content="Obserwuj folder tego pliku" Margin="16,0,0,0" VerticalAlignment="Center" />
             </StackPanel>
             <Button Grid.Column="1" Content="Anuluj" Width="96" Height="34" Margin="0,0,8,0" IsCancel="True" />
             <Button x:Name="ImportButton" Grid.Column="2" Content="Importuj" Width="110" Height="34" IsDefault="True" Click="Import_Click" />

@@ -11,6 +11,7 @@ using CSVForge.Application.Operations;
 using CSVForge.Application.Csv;
 using CSVForge.Application.Tables;
 using CSVForge.Application.Sql;
+using CSVForge.Application.Ports;
 using CSVForge.Domain.Imports;
 using CSVForge.Domain.Operations;
 using Microsoft.Win32;
@@ -48,6 +49,7 @@ public partial class MainWindow : Window
     private const string CreateNewWorkspaceItem = "+ Utwórz nowy workspace...";
     private static readonly string RecentWorkspacesPath = Path.Combine(AppPaths.DataDirectory, "recent-workspaces.json");
     private static readonly string UiPreferencesPath = Path.Combine(AppPaths.DataDirectory, "ui-preferences.json");
+    private static readonly string WatchedFoldersPath = Path.Combine(AppPaths.DataDirectory, "watched-folders.json");
     private static readonly string DefaultWorkspacePath = Path.Combine(
         Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments), "CSVForge", "workspace.db");
 
@@ -99,6 +101,9 @@ public partial class MainWindow : Window
     private string? _lastJoinSql;
     private bool _suppressModeChange;
     private readonly List<AdditionalCompareFileRow> _additionalCompareFiles = [];
+    private readonly ObservableCollection<CsvImportCandidate> _importCandidates = [];
+    private List<WatchedFolderSetting> _watchedFolders = [];
+    private CsvFolderWatchCoordinator? _folderWatchCoordinator;
     private readonly Dictionary<string, IReadOnlyList<string?>> _columnFilters = new(StringComparer.OrdinalIgnoreCase);
     private string? _columnFilterTableName;
 
@@ -107,6 +112,7 @@ public partial class MainWindow : Window
         IOpenWorkspaceUseCase openWorkspace,
         IImportCsvUseCase importCsv,
         IPreviewCsvUseCase previewCsv,
+        ICsvStagingService csvStagingService,
         IListImportedTablesUseCase listImportedTables,
         IBrowseTableUseCase browseTable,
         IGetColumnValuesUseCase getColumnValues,
@@ -142,6 +148,10 @@ public partial class MainWindow : Window
         _getSqlSchema = getSqlSchema;
 
         InitializeComponent();
+        CandidatesListBox.ItemsSource = _importCandidates;
+        _watchedFolders = LoadWatchedFolders();
+        _folderWatchCoordinator = new CsvFolderWatchCoordinator(csvStagingService, CandidateChanged);
+        Closed += (_, _) => _folderWatchCoordinator.Dispose();
         LoadFilesPanelPreferences();
         SetFilesPanelMode(_filesPanelMode, persist: false);
         WorkspaceModeTabControl.SelectionChanged += WorkspaceModeTabControl_SelectionChanged;
@@ -225,6 +235,7 @@ public partial class MainWindow : Window
         _currentWorkspacePath = fullPath;
         SaveRecentWorkspace(fullPath);
         await RefreshImportsAsync();
+        ConfigureFolderWatchers();
         await RefreshOperationsAsync();
         await RefreshSqlSchemaAsync();
     }
@@ -371,9 +382,20 @@ public partial class MainWindow : Window
             && string.Equals(Path.GetExtension(path), ".csv", StringComparison.OrdinalIgnoreCase);
     }
 
-    private async Task ShowImportPreviewAsync(string filePath)
+    private async Task ShowImportPreviewAsync(string filePath, CsvImportCandidate? candidate = null)
     {
-        ImportPreviewWindow previewWindow = new(_previewCsv, _importCsv, filePath)
+        string sourcePath = candidate?.SourcePath ?? filePath;
+        string folder = Path.GetDirectoryName(sourcePath) ?? string.Empty;
+        bool alreadyWatched = _watchedFolders.Any(item => item.IsEnabled && string.Equals(item.Path, folder, StringComparison.OrdinalIgnoreCase));
+        ImportPreviewWindow previewWindow = new(
+            _previewCsv,
+            _importCsv,
+            candidate?.StagedPath ?? filePath,
+            sourcePath,
+            candidate?.Preview,
+            alreadyWatched,
+            candidate?.StagingDatabasePath,
+            candidate?.StagingTableName)
         {
             Owner = this
         };
@@ -392,13 +414,13 @@ public partial class MainWindow : Window
         {
             await RefreshImportsAsync();
             CsvImport? provisionalImport = (ImportsListBox.ItemsSource as IEnumerable<CsvImport>)
-                ?.FirstOrDefault(item => string.Equals(item.SourcePath, filePath, StringComparison.OrdinalIgnoreCase));
+                ?.FirstOrDefault(item => string.Equals(item.SourcePath, sourcePath, StringComparison.OrdinalIgnoreCase));
             if (provisionalImport is not null)
             {
                 SelectImport(provisionalImport.Id);
                 ExpandFilesPanelToFit(provisionalImport.DisplayName);
             }
-            _ = TrackBackgroundImportAsync(importTask, importRegistered);
+            _ = TrackBackgroundImportAsync(importTask, importRegistered, candidate, previewWindow.WatchFolderRequested);
         }
     }
 
@@ -413,7 +435,11 @@ public partial class MainWindow : Window
         ImportStatusText.Text = $"Import w tle: {progress.ProcessedRows:N0} wierszy{remaining}";
     }
 
-    private async Task TrackBackgroundImportAsync(Task<ImportResult> importTask, bool importRegistered)
+    private async Task TrackBackgroundImportAsync(
+        Task<ImportResult> importTask,
+        bool importRegistered,
+        CsvImportCandidate? candidate = null,
+        bool watchFolder = false)
     {
         try
         {
@@ -421,6 +447,14 @@ public partial class MainWindow : Window
             await RefreshImportsAsync();
             SelectImport(result.Import.Id);
             ExpandFilesPanelToFit(result.Import.DisplayName);
+            if (watchFolder)
+            {
+                AddWatchedFolder(Path.GetDirectoryName(result.Import.SourcePath));
+            }
+            if (candidate is not null)
+            {
+                _folderWatchCoordinator?.Complete(candidate);
+            }
             ShowStatusMessage($"Zaimportowano {result.Import.RowCount:N0} wierszy");
             await RefreshSqlSchemaAsync();
         }
@@ -526,6 +560,69 @@ public partial class MainWindow : Window
         {
             await JoinTablesAsync();
         }
+    }
+
+    private async void CandidatesListBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (CandidatesListBox.SelectedItem is not CsvImportCandidate candidate) return;
+        CandidatesListBox.SelectedItem = null;
+        if (candidate.State == CsvCandidateState.Error)
+        {
+            MessageBoxResult retry = MessageBox.Show(this,
+                $"Nie udało się przygotować pliku:\n{candidate.Error}\n\nSpróbować ponownie?",
+                "Przygotowanie CSV", MessageBoxButton.YesNo, MessageBoxImage.Warning);
+            if (retry == MessageBoxResult.Yes) _folderWatchCoordinator?.Retry(candidate);
+            return;
+        }
+        if (candidate.State == CsvCandidateState.Preparing)
+        {
+            BusyWindow waiting = new("Przygotowywanie pliku CSV…") { Owner = this };
+            PropertyChangedEventHandler? handler = null;
+            handler = (_, args) =>
+            {
+                if (args.PropertyName == nameof(CsvImportCandidate.State) && candidate.State != CsvCandidateState.Preparing)
+                    Dispatcher.BeginInvoke(waiting.Close);
+            };
+            candidate.PropertyChanged += handler;
+            waiting.Closed += (_, _) => candidate.PropertyChanged -= handler;
+            waiting.ShowDialog();
+        }
+        if (candidate.State != CsvCandidateState.Ready || candidate.StagedPath is null) return;
+        await ShowImportPreviewAsync(candidate.SourcePath, candidate);
+    }
+
+    private void CandidateChanged(CsvImportCandidate candidate)
+    {
+        Dispatcher.BeginInvoke(() =>
+        {
+            bool exists = _folderWatchCoordinator?.Candidates.Contains(candidate) == true;
+            CsvImportCandidate? current = _importCandidates.FirstOrDefault(item => string.Equals(item.SourcePath, candidate.SourcePath, StringComparison.OrdinalIgnoreCase));
+            if (exists && current is null) _importCandidates.Insert(0, candidate);
+            else if (!exists && current is not null) _importCandidates.Remove(current);
+        });
+    }
+
+    private void ConfigureWatchedFolders_Click(object sender, RoutedEventArgs e)
+    {
+        WatchedFoldersWindow dialog = new(_watchedFolders) { Owner = this };
+        if (dialog.ShowDialog() != true) return;
+        _watchedFolders = dialog.Folders.Select(item => new WatchedFolderSetting(item.Path, item.IsEnabled)).ToList();
+        SaveWatchedFolders();
+        ConfigureFolderWatchers();
+    }
+
+    private void ConfigureFolderWatchers()
+    {
+        IEnumerable<string> importedPaths = (ImportsListBox.ItemsSource as IEnumerable<CsvImport> ?? []).Select(item => item.SourcePath);
+        _folderWatchCoordinator?.Configure(_watchedFolders, importedPaths);
+    }
+
+    private void AddWatchedFolder(string? folder)
+    {
+        if (string.IsNullOrWhiteSpace(folder) || _watchedFolders.Any(item => string.Equals(item.Path, folder, StringComparison.OrdinalIgnoreCase))) return;
+        _watchedFolders.Add(new WatchedFolderSetting(folder));
+        SaveWatchedFolders();
+        ConfigureFolderWatchers();
     }
 
     private void ClearOperationResultView()
@@ -1049,6 +1146,7 @@ public partial class MainWindow : Window
         }
 
         UpdateSelectedImportControls();
+        _folderWatchCoordinator?.RefreshImportedPaths(imports.Select(item => item.SourcePath));
         if (WorkspaceModeTabControl.SelectedItem == BrowseTab)
         {
             _adHocTableName = null;
@@ -1648,6 +1746,37 @@ public partial class MainWindow : Window
                 .ToString(CultureInfo.InvariantCulture);
         }
         DataGrid.ItemsSource = numberedRows;
+    }
+
+    private static List<WatchedFolderSetting> LoadWatchedFolders()
+    {
+        try
+        {
+            if (!File.Exists(WatchedFoldersPath)) return [];
+            WatchedFolderPreference[] preferences = JsonSerializer.Deserialize<WatchedFolderPreference[]>(File.ReadAllText(WatchedFoldersPath)) ?? [];
+            return preferences.Where(item => !string.IsNullOrWhiteSpace(item.Path))
+                .Select(item => new WatchedFolderSetting(item.Path, item.IsEnabled))
+                .DistinctBy(item => item.Path, StringComparer.OrdinalIgnoreCase).ToList();
+        }
+        catch (Exception ex) when (ex is IOException or JsonException or ArgumentException)
+        {
+            Log.Warning(ex, "Could not load watched folders");
+            return [];
+        }
+    }
+
+    private void SaveWatchedFolders()
+    {
+        try
+        {
+            Directory.CreateDirectory(AppPaths.DataDirectory);
+            File.WriteAllText(WatchedFoldersPath, JsonSerializer.Serialize(
+                _watchedFolders.Select(item => new WatchedFolderPreference(item.Path, item.IsEnabled)).ToArray()));
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            Log.Warning(ex, "Could not save watched folders");
+        }
     }
 
     private async Task ShowColumnFilterAsync(string columnName)
@@ -2317,6 +2446,7 @@ public partial class MainWindow : Window
     }
 
     private sealed record UiPreferences(string FilesPanelMode, double ExpandedFilesPanelWidth);
+    private sealed record WatchedFolderPreference(string Path, bool IsEnabled);
 
     private sealed record AdditionalCompareFileRow(
         Grid Container,

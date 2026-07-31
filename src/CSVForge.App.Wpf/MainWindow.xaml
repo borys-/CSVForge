@@ -70,17 +70,23 @@
                                 <ColumnDefinition Width="*" />
                                 <ColumnDefinition Width="Auto" />
                                 <ColumnDefinition Width="Auto" />
+                                <ColumnDefinition Width="Auto" />
                             </Grid.ColumnDefinitions>
                             <StackPanel>
                                 <TextBlock Text="Pliki CSV" FontSize="16" FontWeight="SemiBold" />
                                 <TextBlock Text="Źródła danych workspace" Foreground="{StaticResource TextMutedBrush}" FontSize="11" Margin="0,2,0,0" />
                             </StackPanel>
-                            <Button x:Name="CollapseFilesPanelButton" Grid.Column="1" Width="30" Height="30" Margin="4,0,0,0" Padding="6"
+                            <Button Grid.Column="1" Width="30" Height="30" Margin="4,0,0,0" Padding="5"
+                                    ToolTip="Obserwowane foldery" AutomationProperties.Name="Konfiguruj obserwowane foldery"
+                                    Click="ConfigureWatchedFolders_Click">
+                                <Viewbox><Path Stroke="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}" Fill="Transparent" StrokeThickness="1.5" Data="M1,4 L6,4 L8,6 L15,6 L15,14 L1,14 Z M10,2 A3,3 0 1 1 9.99,2" /></Viewbox>
+                            </Button>
+                            <Button x:Name="CollapseFilesPanelButton" Grid.Column="2" Width="30" Height="30" Margin="4,0,0,0" Padding="6"
                                     ToolTip="Zwiń panel" AutomationProperties.Name="Zwiń panel plików"
                                     Click="SetFilesPanelCollapsed_Click">
                                 <Viewbox><Path Stroke="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}" StrokeThickness="1.6" StrokeStartLineCap="Round" StrokeEndLineCap="Round" StrokeLineJoin="Round" Data="M2,2 L14,2 L14,14 L2,14 Z M6,2 L6,14 M10,5 L7,8 L10,11" /></Viewbox>
                             </Button>
-                            <Button Grid.Column="2" Width="34" Height="34" Content="+" FontSize="19" FontWeight="SemiBold" Margin="6,0,0,0"
+                            <Button Grid.Column="3" Width="34" Height="34" Content="+" FontSize="19" FontWeight="SemiBold" Margin="6,0,0,0"
                                     Style="{StaticResource PrimaryButton}" Padding="0"
                                     ToolTip="Dodaj plik CSV" AutomationProperties.Name="Dodaj plik CSV"
                                     Click="ChooseCsv_Click" />
@@ -105,6 +111,24 @@
                                 </ListBox>
                             </Border>
                         </Expander>
+
+                        <ListBox x:Name="CandidatesListBox" DockPanel.Dock="Top" MaxHeight="210" Margin="0,0,0,6"
+                                 HorizontalContentAlignment="Stretch" SelectionChanged="CandidatesListBox_SelectionChanged">
+                            <ListBox.ItemTemplate>
+                                <DataTemplate>
+                                    <Border Background="#EFF6FF" BorderBrush="#BFDBFE" BorderThickness="1" CornerRadius="5" Padding="6,4" Margin="0,1">
+                                        <Grid>
+                                            <Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+                                            <TextBlock Text="{Binding Symbol}" Foreground="{Binding StateBrush}" FontWeight="Bold" VerticalAlignment="Center" Margin="0,0,7,0"/>
+                                            <StackPanel Grid.Column="1" ToolTip="{Binding ToolTip}">
+                                                <TextBlock Text="{Binding DisplayName}" TextTrimming="CharacterEllipsis"/>
+                                                <TextBlock Text="{Binding Status}" FontSize="10" Foreground="{Binding StateBrush}"/>
+                                            </StackPanel>
+                                        </Grid>
+                                    </Border>
+                                </DataTemplate>
+                            </ListBox.ItemTemplate>
+                        </ListBox>
 
                         <ListBox x:Name="ImportsListBox" SelectionChanged="ImportsListBox_SelectionChanged"
                                  HorizontalContentAlignment="Stretch" PreviewMouseRightButtonDown="ListBox_PreviewMouseRightButtonDown"

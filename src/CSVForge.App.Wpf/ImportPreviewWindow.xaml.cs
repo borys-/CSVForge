@@ -14,18 +14,31 @@ public partial class ImportPreviewWindow : Window
     private readonly IPreviewCsvUseCase _previewCsv;
     private readonly IImportCsvUseCase _importCsv;
     private readonly string _filePath;
+    private readonly string _sourcePath;
+    private readonly CsvPreview? _preparedPreview;
+    private readonly string? _stagingDatabasePath;
+    private readonly string? _stagingTableName;
+    private bool _preparedInterpretationChanged;
     private readonly ObservableCollection<ColumnSetting> _columnSettings = [];
     private bool _isLoaded;
 
-    public ImportPreviewWindow(IPreviewCsvUseCase previewCsv, IImportCsvUseCase importCsv, string filePath)
+    public ImportPreviewWindow(IPreviewCsvUseCase previewCsv, IImportCsvUseCase importCsv, string filePath,
+        string? sourcePath = null, CsvPreview? preparedPreview = null, bool folderAlreadyWatched = false,
+        string? stagingDatabasePath = null, string? stagingTableName = null)
     {
         _previewCsv = previewCsv;
         _importCsv = importCsv;
         _filePath = filePath;
+        _sourcePath = sourcePath ?? filePath;
+        _preparedPreview = preparedPreview;
+        _stagingDatabasePath = stagingDatabasePath;
+        _stagingTableName = stagingTableName;
 
         InitializeComponent();
-        FileNameText.Text = filePath;
-        DisplayNameTextBox.Text = Path.GetFileNameWithoutExtension(filePath);
+        FileNameText.Text = _sourcePath;
+        DisplayNameTextBox.Text = Path.GetFileNameWithoutExtension(_sourcePath);
+        WatchFolderCheckBox.IsChecked = folderAlreadyWatched;
+        WatchFolderCheckBox.IsEnabled = !folderAlreadyWatched;
         ColumnTypeDataGridColumn.ItemsSource = new[]
         {
             new ColumnTypeOption("Tekst", CsvColumnDataType.Text),
@@ -41,17 +54,24 @@ public partial class ImportPreviewWindow : Window
     public ImportResult? ImportedResult { get; private set; }
     public Task<ImportResult>? ImportTask { get; private set; }
     public event Action<ImportProgress>? ProgressChanged;
+    public bool WatchFolderRequested => WatchFolderCheckBox.IsChecked == true;
 
     private async void ImportPreviewWindow_Loaded(object sender, RoutedEventArgs e)
     {
         _isLoaded = true;
-        await RefreshPreviewAsync();
+        if (_preparedPreview is not null)
+        {
+            ShowPreview(_preparedPreview);
+            PreviewStatusText.Text = $"{_preparedPreview.Rows.Count} wierszy";
+        }
+        else await RefreshPreviewAsync();
     }
 
     private async void PreviewSetting_Changed(object sender, SelectionChangedEventArgs e)
     {
         if (_isLoaded)
         {
+            _preparedInterpretationChanged = true;
             await RefreshPreviewAsync();
         }
     }
@@ -141,7 +161,10 @@ public partial class ImportPreviewWindow : Window
                 setting.Name,
                 setting.DataType,
                 setting.Include)).ToArray();
-        return new ImportRequest(_filePath, DisplayNameTextBox.Text.Trim(), mode != "No", null, null, 5000, mode == "Auto", mappings);
+        return new ImportRequest(
+            _filePath, DisplayNameTextBox.Text.Trim(), mode != "No", null, null, 5000, mode == "Auto", mappings, _sourcePath,
+            _preparedInterpretationChanged ? null : _stagingDatabasePath,
+            _preparedInterpretationChanged ? null : _stagingTableName);
     }
 
     private void SelectAllColumns_Click(object sender, RoutedEventArgs e) => SetAllColumnsIncluded(true);

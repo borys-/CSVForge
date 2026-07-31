@@ -152,8 +152,8 @@
             <Setter Property="AlternatingRowBackground" Value="#F8FAFC" />
             <Setter Property="HorizontalGridLinesBrush" Value="#EDF1F6" />
             <Setter Property="VerticalGridLinesBrush" Value="Transparent" />
-            <Setter Property="RowHeight" Value="24" />
-            <Setter Property="ColumnHeaderHeight" Value="28" />
+            <Setter Property="RowHeight" Value="20" />
+            <Setter Property="ColumnHeaderHeight" Value="24" />
         </Style>
         <Style TargetType="DataGridColumnHeader">
             <Setter Property="Background" Value="#F8FAFC" />

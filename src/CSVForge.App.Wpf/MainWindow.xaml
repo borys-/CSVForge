@@ -111,15 +111,6 @@
                             </Border>
                         </Expander>
 
-                        <Border DockPanel.Dock="Top" Background="{StaticResource SurfaceMutedBrush}"
-                                BorderBrush="{StaticResource BorderBrush}" BorderThickness="1" CornerRadius="6"
-                                Padding="9,7" Margin="0,0,0,8" IsHitTestVisible="False">
-                            <TextBlock x:Name="DropHintText" Text="Upuść tutaj pliki CSV, aby dodać je jako tabele"
-                                       Foreground="{StaticResource TextMutedBrush}" TextWrapping="Wrap"
-                                       TextAlignment="Center" FontSize="11"
-                                       AutomationProperties.LiveSetting="Polite" />
-                        </Border>
-
                         <ListBox x:Name="ImportsListBox" SelectionChanged="ImportsListBox_SelectionChanged"
                                  HorizontalContentAlignment="Stretch" PreviewMouseRightButtonDown="ListBox_PreviewMouseRightButtonDown"
                                  AllowDrop="True" DragEnter="FilesDropArea_DragEnter" DragOver="FilesDropArea_DragOver"

@@ -317,16 +317,12 @@ public partial class MainWindow : Window
         FilesDropArea.SetResourceReference(
             Border.BorderBrushProperty,
             canImport ? "AccentBrush" : "BorderBrush");
-        DropHintText.Text = canImport
-            ? "Upuść, aby dodać pliki CSV jako tabele"
-            : "Można dodać tylko istniejące pliki CSV";
     }
 
     private void ResetDropFeedback()
     {
         FilesDropArea.SetResourceReference(Border.BackgroundProperty, "SurfaceBrush");
         FilesDropArea.SetResourceReference(Border.BorderBrushProperty, "BorderBrush");
-        DropHintText.Text = "Upuść tutaj pliki CSV, aby dodać je jako tabele";
     }
 
     private static string[] GetDroppedPaths(IDataObject data)

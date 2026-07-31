@@ -1211,25 +1211,6 @@ public partial class MainWindow : Window
     private void SetFilesPanelExpanded_Click(object sender, RoutedEventArgs e) =>
         SetFilesPanelMode(FilesPanelMode.Expanded);
 
-    private void SetFilesPanelAutoHide_Click(object sender, RoutedEventArgs e) =>
-        SetFilesPanelMode(FilesPanelMode.AutoHide);
-
-    private void FilesPanel_MouseEnter(object sender, MouseEventArgs e)
-    {
-        if (_filesPanelMode == FilesPanelMode.AutoHide)
-        {
-            ShowFilesPanelContent(true);
-        }
-    }
-
-    private void FilesPanel_MouseLeave(object sender, MouseEventArgs e)
-    {
-        if (_filesPanelMode == FilesPanelMode.AutoHide)
-        {
-            ShowFilesPanelContent(false);
-        }
-    }
-
     private void SetFilesPanelMode(FilesPanelMode mode)
     {
         if (_filesPanelMode == FilesPanelMode.Expanded && FilesPanelColumn.ActualWidth >= 240)
@@ -1238,8 +1219,7 @@ public partial class MainWindow : Window
         }
 
         _filesPanelMode = mode;
-        bool showContent = mode == FilesPanelMode.Expanded
-            || mode == FilesPanelMode.AutoHide && FilesDropArea.IsMouseOver;
+        bool showContent = mode == FilesPanelMode.Expanded;
         ShowFilesPanelContent(showContent);
         UpdateFilesPanelModeButtons();
     }
@@ -1250,22 +1230,18 @@ public partial class MainWindow : Window
         FilesPanelColumn.Width = new GridLength(show ? _expandedFilesPanelWidth : 48);
         FilesDropArea.Padding = show ? new Thickness(14) : new Thickness(7);
         FilesPanelContent.Visibility = show ? Visibility.Visible : Visibility.Collapsed;
-        OpenFilesPanelButton.Visibility = show ? Visibility.Collapsed : Visibility.Visible;
+        CollapsedFilesPanelContent.Visibility = show ? Visibility.Collapsed : Visibility.Visible;
         bool showSplitter = show && _filesPanelMode == FilesPanelMode.Expanded;
         FilesPanelSplitter.Visibility = showSplitter
             ? Visibility.Visible
             : Visibility.Collapsed;
         FilesPanelSplitterColumn.Width = new GridLength(showSplitter ? 16 : 0);
-        OpenFilesPanelButton.ToolTip = _filesPanelMode == FilesPanelMode.AutoHide
-            ? "Panel rozwinie się po najechaniu"
-            : "Rozwiń panel plików";
     }
 
     private void UpdateFilesPanelModeButtons()
     {
         CollapseFilesPanelButton.Opacity = _filesPanelMode == FilesPanelMode.Collapsed ? 1 : 0.55;
         ExpandFilesPanelButton.Opacity = _filesPanelMode == FilesPanelMode.Expanded ? 1 : 0.55;
-        AutoHideFilesPanelButton.Opacity = _filesPanelMode == FilesPanelMode.AutoHide ? 1 : 0.55;
     }
 
     private void UpdateComparisonFiles()
@@ -2256,8 +2232,7 @@ public partial class MainWindow : Window
     private enum FilesPanelMode
     {
         Collapsed,
-        Expanded,
-        AutoHide
+        Expanded
     }
 
     private sealed record AdditionalCompareFileRow(

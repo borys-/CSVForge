@@ -35,7 +35,13 @@ internal sealed class CsvImportCandidate : INotifyPropertyChanged
     public CsvPreview? Preview { get; set; }
     public CsvCandidateState State { get => _state; set { _state = value; OnChanged(); OnChanged(nameof(Status)); OnChanged(nameof(StateBrush)); OnChanged(nameof(Symbol)); } }
     public string? Error { get => _error; set { _error = value; OnChanged(); OnChanged(nameof(ToolTip)); } }
-    public string Status => State switch { CsvCandidateState.Preparing => "Przygotowywanie…", CsvCandidateState.Ready => "Gotowy do importu", _ => "Błąd przygotowania" };
+    public string Status => State switch
+    {
+        CsvCandidateState.Preparing => "Przygotowywanie…",
+        CsvCandidateState.Ready when string.Equals(System.IO.Path.GetExtension(SourcePath), ".zip", StringComparison.OrdinalIgnoreCase) => "ZIP gotowy do importu",
+        CsvCandidateState.Ready => "Gotowy do importu",
+        _ => "Błąd przygotowania"
+    };
     public string Symbol => State switch { CsvCandidateState.Preparing => "◌", CsvCandidateState.Ready => "●", _ => "!" };
     public Brush StateBrush => State switch { CsvCandidateState.Preparing => Brushes.DarkGoldenrod, CsvCandidateState.Ready => Brushes.DodgerBlue, _ => Brushes.Firebrick };
     public string ToolTip => Error is null ? SourcePath : $"{SourcePath}\n{Error}";

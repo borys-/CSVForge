@@ -144,6 +144,22 @@ public sealed class CsvReaderServiceTests
         Assert.Equal(["Order_Id", "Order_Id_2", "Column_123"], preview.Columns.Select(column => column.Name));
     }
 
+    [Fact]
+    public async Task PreviewCsvUseCase_TrimsFieldsByDefaultAndCanPreserveWhitespace()
+    {
+        string csvPath = await WriteTempFileAsync(" Name ; City \r\n Ada ; Warszawa \r\n", Encoding.UTF8);
+
+        CsvPreview trimmed = await CreatePreviewUseCase().ExecuteAsync(new ImportRequest(csvPath, "People", true, null, null));
+        CsvPreview preserved = await CreatePreviewUseCase().ExecuteAsync(new ImportRequest(
+            csvPath, "People", true, null, null, TrimFields: false));
+
+        Assert.Equal(["Name", "City"], trimmed.Columns.Select(column => column.Name));
+        Assert.Equal("Ada", trimmed.Rows[0][0]);
+        Assert.Equal("Warszawa", trimmed.Rows[0][1]);
+        Assert.Equal(" Ada ", preserved.Rows[0][0]);
+        Assert.Equal(" Warszawa ", preserved.Rows[0][1]);
+    }
+
     private static IPreviewCsvUseCase CreatePreviewUseCase()
     {
         ServiceProvider provider = new ServiceCollection()

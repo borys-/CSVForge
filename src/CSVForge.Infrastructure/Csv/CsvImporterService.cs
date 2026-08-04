@@ -38,6 +38,7 @@ internal sealed class CsvImporterService(IWorkspaceContext workspaceContext) : I
         if (!string.IsNullOrWhiteSpace(request.StagingDatabasePath)
             && !string.IsNullOrWhiteSpace(request.StagingTableName)
             && File.Exists(request.StagingDatabasePath)
+            && request.TrimFields
             && (request.ColumnMappings is null || request.ColumnMappings.Where(item => item.Include).All(item => item.DataType == CsvColumnDataType.Text)))
         {
             return await PromoteStagedTableAsync(connection, request, cancellationToken);
@@ -47,7 +48,6 @@ internal sealed class CsvImporterService(IWorkspaceContext workspaceContext) : I
         {
             CsvImport import = await ImportRowsAsync(connection, request, encoding, delimiter, progress, cancellationToken);
             IReadOnlyList<ImportError> errors = await ReadErrorsAsync(connection, import.Id, cancellationToken);
-            await SqliteDatabaseMaintenance.OptimizeAsync(connection, CancellationToken.None);
             return new ImportResult(import, errors);
         }
         catch
@@ -115,7 +115,6 @@ internal sealed class CsvImporterService(IWorkspaceContext workspaceContext) : I
             rowCount,
             mappings.Select((mapping, index) => new CsvColumn(sourceColumns[mapping.SourceIndex], outputColumns[index], index)).ToArray());
         await SaveMetadataAsync(connection, import, cancellationToken);
-        await SqliteDatabaseMaintenance.OptimizeAsync(connection, CancellationToken.None);
         return new ImportResult(import, []);
     }
 
@@ -136,17 +135,17 @@ internal sealed class CsvImporterService(IWorkspaceContext workspaceContext) : I
             throw new InvalidOperationException("CSV file is empty.");
         }
 
-        string[] firstRecord = csv.Parser.Record ?? [];
+        string[] firstRecord = NormalizeRecord(csv.Parser.Record ?? [], request.TrimFields);
         string[]? secondRecord = null;
         int trailingEmptyColumns = 0;
         bool hasHeader = request.HasHeader;
         if (request.AutoDetectHeader && await csv.ReadAsync())
         {
-            secondRecord = csv.Parser.Record ?? [];
+            secondRecord = NormalizeRecord(csv.Parser.Record ?? [], request.TrimFields);
             if (CsvHeaderDetector.LooksLikeReportPreamble(firstRecord, secondRecord))
             {
                 firstRecord = secondRecord;
-                secondRecord = await csv.ReadAsync() ? csv.Parser.Record ?? [] : null;
+                secondRecord = await csv.ReadAsync() ? NormalizeRecord(csv.Parser.Record ?? [], request.TrimFields) : null;
             }
 
             if (secondRecord is not null)
@@ -189,7 +188,7 @@ internal sealed class CsvImporterService(IWorkspaceContext workspaceContext) : I
         try
         {
             transaction = (SqliteTransaction)await connection.BeginTransactionAsync(cancellationToken);
-            using RawRowWriter writer = new(connection, tableName, columnNames, mappings);
+            using RawRowWriter writer = new(connection, tableName, columnNames, mappings, request.TrimFields);
 
             if (!hasHeader && TryWriteRecord(firstRecord, csv.Parser.Row, csv.Parser.RawRecord, sourceHeaders.Count, mappings, writer, errors))
             {
@@ -202,7 +201,7 @@ internal sealed class CsvImporterService(IWorkspaceContext workspaceContext) : I
 
             while (await csv.ReadAsync())
             {
-                cancellationToken.ThrowIfCancellationRequested();
+                if ((rowCount & 1023) == 0) cancellationToken.ThrowIfCancellationRequested();
                 string[] record = CsvHeaderDetector.TrimTrailingEmptyColumns(csv.Parser.Record ?? [], trailingEmptyColumns);
                 if (!TryWriteRecord(record, csv.Parser.Row, csv.Parser.RawRecord, sourceHeaders.Count, mappings, writer, errors))
                 {
@@ -264,6 +263,9 @@ internal sealed class CsvImporterService(IWorkspaceContext workspaceContext) : I
             throw;
         }
     }
+
+    private static string[] NormalizeRecord(string[] record, bool trimFields) =>
+        trimFields ? record.Select(value => value.Trim()).ToArray() : record;
 
     private static CsvConfiguration CreateConfiguration(char delimiter)
     {
@@ -357,10 +359,12 @@ internal sealed class CsvImporterService(IWorkspaceContext workspaceContext) : I
     {
         private readonly sqlite3_stmt statement;
         private readonly IReadOnlyList<CsvColumnMapping> mappings;
+        private readonly bool trimFields;
 
-        public RawRowWriter(SqliteConnection connection, string tableName, IReadOnlyList<string> columnNames, IReadOnlyList<CsvColumnMapping> mappings)
+        public RawRowWriter(SqliteConnection connection, string tableName, IReadOnlyList<string> columnNames, IReadOnlyList<CsvColumnMapping> mappings, bool trimFields)
         {
             this.mappings = mappings;
+            this.trimFields = trimFields;
             int result = raw.sqlite3_prepare_v2(connection.Handle, BuildInsertSql(tableName, columnNames), out statement);
             Ensure(result, "prepare the import statement");
         }
@@ -370,7 +374,9 @@ internal sealed class CsvImporterService(IWorkspaceContext workspaceContext) : I
             for (int i = 0; i < mappings.Count; i++)
             {
                 CsvColumnMapping mapping = mappings[i];
-                Ensure(BindValue(statement, i + 1, ConvertValue(record[mapping.SourceIndex], mapping.DataType)), "bind an imported value");
+                string value = record[mapping.SourceIndex];
+                if (trimFields) value = value.Trim();
+                Ensure(BindValue(statement, i + 1, ConvertValue(value, mapping.DataType)), "bind an imported value");
             }
 
             int stepResult = raw.sqlite3_step(statement);

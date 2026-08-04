@@ -24,7 +24,8 @@ public partial class ImportPreviewWindow : Window
 
     public ImportPreviewWindow(IPreviewCsvUseCase previewCsv, IImportCsvUseCase importCsv, string filePath,
         string? sourcePath = null, CsvPreview? preparedPreview = null, bool folderAlreadyWatched = false,
-        string? stagingDatabasePath = null, string? stagingTableName = null)
+        string? stagingDatabasePath = null, string? stagingTableName = null,
+        string? displayName = null, string? sourceDisplayName = null, bool watchFolderAvailable = true)
     {
         _previewCsv = previewCsv;
         _importCsv = importCsv;
@@ -35,10 +36,11 @@ public partial class ImportPreviewWindow : Window
         _stagingTableName = stagingTableName;
 
         InitializeComponent();
-        FileNameText.Text = _sourcePath;
-        DisplayNameTextBox.Text = Path.GetFileNameWithoutExtension(_sourcePath);
+        FileNameText.Text = sourceDisplayName ?? _sourcePath;
+        DisplayNameTextBox.Text = displayName ?? Path.GetFileNameWithoutExtension(_sourcePath);
         WatchFolderCheckBox.IsChecked = folderAlreadyWatched;
         WatchFolderCheckBox.IsEnabled = !folderAlreadyWatched;
+        WatchFolderCheckBox.Visibility = watchFolderAvailable ? Visibility.Visible : Visibility.Collapsed;
         ColumnTypeDataGridColumn.ItemsSource = new[]
         {
             new ColumnTypeOption("Tekst", CsvColumnDataType.Text),
@@ -68,6 +70,15 @@ public partial class ImportPreviewWindow : Window
     }
 
     private async void PreviewSetting_Changed(object sender, SelectionChangedEventArgs e)
+    {
+        if (_isLoaded)
+        {
+            _preparedInterpretationChanged = true;
+            await RefreshPreviewAsync();
+        }
+    }
+
+    private async void TrimFields_Changed(object sender, RoutedEventArgs e)
     {
         if (_isLoaded)
         {
@@ -162,9 +173,10 @@ public partial class ImportPreviewWindow : Window
                 setting.DataType,
                 setting.Include)).ToArray();
         return new ImportRequest(
-            _filePath, DisplayNameTextBox.Text.Trim(), mode != "No", null, null, 5000, mode == "Auto", mappings, _sourcePath,
+            _filePath, DisplayNameTextBox.Text.Trim(), mode != "No", null, null, 100_000, mode == "Auto", mappings, _sourcePath,
             _preparedInterpretationChanged ? null : _stagingDatabasePath,
-            _preparedInterpretationChanged ? null : _stagingTableName);
+            _preparedInterpretationChanged ? null : _stagingTableName,
+            TrimFieldsCheckBox.IsChecked == true);
     }
 
     private void SelectAllColumns_Click(object sender, RoutedEventArgs e) => SetAllColumnsIncluded(true);
@@ -230,6 +242,7 @@ public partial class ImportPreviewWindow : Window
     {
         ImportButton.IsEnabled = !busy;
         HeaderModeComboBox.IsEnabled = !busy;
+        TrimFieldsCheckBox.IsEnabled = !busy;
         ImportProgressBar.Visibility = busy ? Visibility.Visible : Visibility.Collapsed;
         OperationStatusText.Text = status;
     }

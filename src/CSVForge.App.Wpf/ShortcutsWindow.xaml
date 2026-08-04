@@ -1,0 +1,24 @@
+<Window x:Class="CSVForge.App.Wpf.ShortcutsWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Skróty klawiszowe" Width="620" Height="590" MinWidth="500" MinHeight="420"
+        WindowStartupLocation="CenterOwner" ShowInTaskbar="False" KeyDown="Window_KeyDown">
+    <Grid Margin="20">
+        <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="*"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
+        <StackPanel Margin="0,0,0,14">
+            <TextBlock Text="Skróty klawiszowe" FontSize="22" FontWeight="SemiBold" />
+            <TextBlock Text="Najważniejsze akcje CSVForge dostępne bez odrywania rąk od klawiatury."
+                       Foreground="{StaticResource TextMutedBrush}" Margin="0,4,0,0" />
+        </StackPanel>
+        <ListView Grid.Row="1" ItemsSource="{Binding Shortcuts}">
+            <ListView.View>
+                <GridView>
+                    <GridViewColumn Header="Skrót" Width="130" DisplayMemberBinding="{Binding Keys}" />
+                    <GridViewColumn Header="Akcja" Width="270" DisplayMemberBinding="{Binding Description}" />
+                    <GridViewColumn Header="Obszar" Width="120" DisplayMemberBinding="{Binding Category}" />
+                </GridView>
+            </ListView.View>
+        </ListView>
+        <Button Grid.Row="2" Content="Zamknij" HorizontalAlignment="Right" MinWidth="96" Margin="0,14,0,0" IsDefault="True" Click="Close_Click" />
+    </Grid>
+</Window>

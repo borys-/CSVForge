@@ -14,6 +14,7 @@ using CSVForge.Application.Sql;
 using CSVForge.Application.Ports;
 using CSVForge.Domain.Imports;
 using CSVForge.Domain.Operations;
+using CSVForge.Infrastructure.Csv;
 using Microsoft.Win32;
 using System.Windows;
 using System.Windows.Controls;
@@ -71,6 +72,7 @@ public partial class MainWindow : Window
     private readonly IDeleteOperationUseCase _deleteOperation;
     private readonly IExecuteSqlUseCase _executeSql;
     private readonly IGetSqlSchemaUseCase _getSqlSchema;
+    private readonly IWorkspaceMaintenanceService _workspaceMaintenance;
     private readonly SqlCompletionService _sqlCompletionService = new();
 
     private CsvImport? _selectedImport;
@@ -91,6 +93,11 @@ public partial class MainWindow : Window
     private FilesPanelMode _filesPanelMode = FilesPanelMode.Expanded;
     private double _expandedFilesPanelWidth = 300;
     private int _activeImportCount;
+    private readonly DispatcherTimer _idleMaintenanceTimer;
+    private DateTimeOffset _lastUserActivityUtc = DateTimeOffset.UtcNow;
+    private CancellationTokenSource? _maintenanceCancellation;
+    private bool _maintenanceRunning;
+    private bool _databaseMaintenanceRequired = true;
     private SqlSchemaSnapshot _sqlSchema = SqlSchemaSnapshot.Empty;
     private CompletionWindow? _sqlCompletionWindow;
     private string? _sqlResultQuery;
@@ -102,6 +109,8 @@ public partial class MainWindow : Window
     private bool _suppressModeChange;
     private readonly List<AdditionalCompareFileRow> _additionalCompareFiles = [];
     private readonly ObservableCollection<CsvImportCandidate> _importCandidates = [];
+    private readonly ObservableCollection<object> _fileItems = [];
+    private IReadOnlyList<CsvImport> _imports = [];
     private List<WatchedFolderSetting> _watchedFolders = [];
     private CsvFolderWatchCoordinator? _folderWatchCoordinator;
     private readonly Dictionary<string, IReadOnlyList<string?>> _columnFilters = new(StringComparer.OrdinalIgnoreCase);
@@ -126,7 +135,8 @@ public partial class MainWindow : Window
         IRenameImportUseCase renameImport,
         IDeleteOperationUseCase deleteOperation,
         IExecuteSqlUseCase executeSql,
-        IGetSqlSchemaUseCase getSqlSchema)
+        IGetSqlSchemaUseCase getSqlSchema,
+        IWorkspaceMaintenanceService workspaceMaintenance)
     {
         _createWorkspace = createWorkspace;
         _openWorkspace = openWorkspace;
@@ -146,12 +156,24 @@ public partial class MainWindow : Window
         _deleteOperation = deleteOperation;
         _executeSql = executeSql;
         _getSqlSchema = getSqlSchema;
+        _workspaceMaintenance = workspaceMaintenance;
 
         InitializeComponent();
-        CandidatesListBox.ItemsSource = _importCandidates;
+        AddHandler(Mouse.PreviewMouseDownEvent, new MouseButtonEventHandler(UserActivity_PreviewMouseDown), true);
+        AddHandler(Mouse.PreviewMouseWheelEvent, new MouseWheelEventHandler(UserActivity_PreviewMouseWheel), true);
+        AddHandler(Keyboard.PreviewKeyDownEvent, new KeyEventHandler(MainWindow_PreviewKeyDown), true);
+        ImportsListBox.ItemsSource = _fileItems;
         _watchedFolders = LoadWatchedFolders();
         _folderWatchCoordinator = new CsvFolderWatchCoordinator(csvStagingService, CandidateChanged);
-        Closed += (_, _) => _folderWatchCoordinator.Dispose();
+        _idleMaintenanceTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(15) };
+        _idleMaintenanceTimer.Tick += IdleMaintenanceTimer_Tick;
+        _idleMaintenanceTimer.Start();
+        Closed += (_, _) =>
+        {
+            _idleMaintenanceTimer.Stop();
+            _maintenanceCancellation?.Cancel();
+            _folderWatchCoordinator.Dispose();
+        };
         LoadFilesPanelPreferences();
         SetFilesPanelMode(_filesPanelMode, persist: false);
         WorkspaceModeTabControl.SelectionChanged += WorkspaceModeTabControl_SelectionChanged;
@@ -233,6 +255,7 @@ public partial class MainWindow : Window
 
         WorkspaceStatusText.Text = fullPath;
         _currentWorkspacePath = fullPath;
+        _databaseMaintenanceRequired = true;
         SaveRecentWorkspace(fullPath);
         await RefreshImportsAsync();
         ConfigureFolderWatchers();
@@ -244,13 +267,13 @@ public partial class MainWindow : Window
     {
         OpenFileDialog dialog = new()
         {
-            Filter = "CSV files (*.csv)|*.csv|All files (*.*)|*.*",
-            Title = "Wybierz plik CSV"
+            Filter = "Pliki CSV i ZIP (*.csv;*.zip)|*.csv;*.zip|CSV (*.csv)|*.csv|ZIP (*.zip)|*.zip|Wszystkie pliki (*.*)|*.*",
+            Title = "Wybierz plik CSV lub ZIP"
         };
 
         if (dialog.ShowDialog(this) == true)
         {
-            await ShowImportPreviewAsync(dialog.FileName);
+            await ImportSelectedFileAsync(dialog.FileName);
         }
     }
 
@@ -281,20 +304,20 @@ public partial class MainWindow : Window
             return;
         }
 
-        string[] csvPaths = paths
-            .Where(IsCsvFile)
+        string[] importPaths = paths
+            .Where(IsImportFile)
             .Distinct(StringComparer.OrdinalIgnoreCase)
             .ToArray();
         string[] rejectedPaths = paths
-            .Where(path => !IsCsvFile(path))
+            .Where(path => !IsImportFile(path))
             .ToArray();
 
-        if (csvPaths.Length == 0)
+        if (importPaths.Length == 0)
         {
             ShowStatusMessage("Nie dodano plików");
             MessageBox.Show(
                 this,
-                "Upuść co najmniej jeden istniejący plik z rozszerzeniem .csv.",
+                "Upuść co najmniej jeden istniejący plik CSV lub ZIP.",
                 "Nieobsługiwany plik",
                 MessageBoxButton.OK,
                 MessageBoxImage.Warning);
@@ -304,10 +327,10 @@ public partial class MainWindow : Window
         _handlingDroppedFiles = true;
         try
         {
-            foreach (string path in csvPaths)
+            foreach (string path in importPaths)
             {
                 ShowStatusMessage($"Dodawanie pliku {Path.GetFileName(path)}", autoHide: false);
-                await ShowImportPreviewAsync(path);
+                await ImportSelectedFileAsync(path);
             }
 
             if (rejectedPaths.Length > 0)
@@ -320,7 +343,7 @@ public partial class MainWindow : Window
                     : string.Empty;
                 MessageBox.Show(
                     this,
-                    $"Pominięto pliki, które nie są plikami CSV:{Environment.NewLine}{rejectedNames}{more}",
+                    $"Pominięto pliki, które nie są plikami CSV ani ZIP:{Environment.NewLine}{rejectedNames}{more}",
                     "Niektóre pliki pominięto",
                     MessageBoxButton.OK,
                     MessageBoxImage.Warning);
@@ -334,7 +357,7 @@ public partial class MainWindow : Window
 
     private void UpdateDropFeedback(DragEventArgs e)
     {
-        bool canImport = GetDroppedPaths(e.Data).Any(IsCsvFile);
+        bool canImport = GetDroppedPaths(e.Data).Any(IsImportFile);
         e.Effects = canImport ? DragDropEffects.Copy : DragDropEffects.None;
         e.Handled = true;
 
@@ -376,15 +399,56 @@ public partial class MainWindow : Window
         }
     }
 
-    private static bool IsCsvFile(string path)
+    private static bool IsImportFile(string path)
     {
-        return File.Exists(path)
-            && string.Equals(Path.GetExtension(path), ".csv", StringComparison.OrdinalIgnoreCase);
+        string extension = Path.GetExtension(path);
+        return File.Exists(path) && (string.Equals(extension, ".csv", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(extension, ".zip", StringComparison.OrdinalIgnoreCase));
     }
 
-    private async Task ShowImportPreviewAsync(string filePath, CsvImportCandidate? candidate = null)
+    private async Task ImportSelectedFileAsync(string path)
     {
-        string sourcePath = candidate?.SourcePath ?? filePath;
+        if (!string.Equals(Path.GetExtension(path), ".zip", StringComparison.OrdinalIgnoreCase))
+        {
+            await ShowImportPreviewAsync(path);
+            return;
+        }
+
+        try
+        {
+            IReadOnlyList<ZipCsvExtractor.ExtractedCsvFile> files = await ZipCsvExtractor.ExtractAsync(path);
+            try
+            {
+                foreach (ZipCsvExtractor.ExtractedCsvFile file in files)
+                {
+                    await ShowImportPreviewAsync(
+                        file.FilePath,
+                        sourcePathOverride: path,
+                        displayName: Path.GetFileNameWithoutExtension(file.EntryName),
+                        sourceDisplayName: $"{path}  →  {file.EntryName}",
+                        extractedFile: file);
+                }
+            }
+            finally
+            {
+                foreach (ZipCsvExtractor.ExtractedCsvFile file in files) file.Dispose();
+            }
+        }
+        catch (Exception ex) when (ex is InvalidDataException or IOException or UnauthorizedAccessException)
+        {
+            MessageBox.Show(this, PolishErrorMessage(ex), "CSVForge", MessageBoxButton.OK, MessageBoxImage.Error);
+        }
+    }
+
+    private async Task ShowImportPreviewAsync(
+        string filePath,
+        CsvImportCandidate? candidate = null,
+        string? sourcePathOverride = null,
+        string? displayName = null,
+        string? sourceDisplayName = null,
+        ZipCsvExtractor.ExtractedCsvFile? extractedFile = null)
+    {
+        string sourcePath = candidate?.SourcePath ?? sourcePathOverride ?? filePath;
         string folder = Path.GetDirectoryName(sourcePath) ?? string.Empty;
         bool alreadyWatched = _watchedFolders.Any(item => item.IsEnabled && string.Equals(item.Path, folder, StringComparison.OrdinalIgnoreCase));
         ImportPreviewWindow previewWindow = new(
@@ -395,7 +459,10 @@ public partial class MainWindow : Window
             candidate?.Preview,
             alreadyWatched,
             candidate?.StagingDatabasePath,
-            candidate?.StagingTableName)
+            candidate?.StagingTableName,
+            displayName,
+            sourceDisplayName,
+            extractedFile is null)
         {
             Owner = this
         };
@@ -413,15 +480,17 @@ public partial class MainWindow : Window
         if (previewWindow.ShowDialog() == true && previewWindow.ImportTask is { } importTask)
         {
             await RefreshImportsAsync();
-            CsvImport? provisionalImport = (ImportsListBox.ItemsSource as IEnumerable<CsvImport>)
-                ?.FirstOrDefault(item => string.Equals(item.SourcePath, sourcePath, StringComparison.OrdinalIgnoreCase));
+            CsvImport? provisionalImport = _imports
+                .FirstOrDefault(item => string.Equals(item.SourcePath, sourcePath, StringComparison.OrdinalIgnoreCase));
             if (provisionalImport is not null)
             {
                 SelectImport(provisionalImport.Id);
                 ExpandFilesPanelToFit(provisionalImport.DisplayName);
             }
-            _ = TrackBackgroundImportAsync(importTask, importRegistered, candidate, previewWindow.WatchFolderRequested);
+            _ = TrackBackgroundImportAsync(importTask, importRegistered, candidate, previewWindow.WatchFolderRequested, extractedFile);
+            extractedFile = null;
         }
+        extractedFile?.Dispose();
     }
 
     private void ShowImportProgress(ImportProgress progress)
@@ -439,7 +508,8 @@ public partial class MainWindow : Window
         Task<ImportResult> importTask,
         bool importRegistered,
         CsvImportCandidate? candidate = null,
-        bool watchFolder = false)
+        bool watchFolder = false,
+        ZipCsvExtractor.ExtractedCsvFile? extractedFile = null)
     {
         try
         {
@@ -456,6 +526,7 @@ public partial class MainWindow : Window
                 _folderWatchCoordinator?.Complete(candidate);
             }
             ShowStatusMessage($"Zaimportowano {result.Import.RowCount:N0} wierszy");
+            _databaseMaintenanceRequired = true;
             await RefreshSqlSchemaAsync();
         }
         catch (OperationCanceledException)
@@ -471,6 +542,8 @@ public partial class MainWindow : Window
         }
         finally
         {
+            _databaseMaintenanceRequired = true;
+            extractedFile?.Dispose();
             if (importRegistered)
             {
                 _activeImportCount = Math.Max(0, _activeImportCount - 1);
@@ -488,6 +561,21 @@ public partial class MainWindow : Window
     {
         if (_updatingImports)
         {
+            return;
+        }
+
+        if (ImportsListBox.SelectedItem is CsvImportCandidate candidate)
+        {
+            _updatingImports = true;
+            try
+            {
+                ImportsListBox.SelectedItem = null;
+            }
+            finally
+            {
+                _updatingImports = false;
+            }
+            await OpenImportCandidateAsync(candidate);
             return;
         }
 
@@ -562,21 +650,19 @@ public partial class MainWindow : Window
         }
     }
 
-    private async void CandidatesListBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    private async Task OpenImportCandidateAsync(CsvImportCandidate candidate)
     {
-        if (CandidatesListBox.SelectedItem is not CsvImportCandidate candidate) return;
-        CandidatesListBox.SelectedItem = null;
         if (candidate.State == CsvCandidateState.Error)
         {
             MessageBoxResult retry = MessageBox.Show(this,
                 $"Nie udało się przygotować pliku:\n{candidate.Error}\n\nSpróbować ponownie?",
-                "Przygotowanie CSV", MessageBoxButton.YesNo, MessageBoxImage.Warning);
+                "Przygotowanie pliku", MessageBoxButton.YesNo, MessageBoxImage.Warning);
             if (retry == MessageBoxResult.Yes) _folderWatchCoordinator?.Retry(candidate);
             return;
         }
         if (candidate.State == CsvCandidateState.Preparing)
         {
-            BusyWindow waiting = new("Przygotowywanie pliku CSV…") { Owner = this };
+            BusyWindow waiting = new("Przygotowywanie pliku…") { Owner = this };
             PropertyChangedEventHandler? handler = null;
             handler = (_, args) =>
             {
@@ -587,7 +673,13 @@ public partial class MainWindow : Window
             waiting.Closed += (_, _) => candidate.PropertyChanged -= handler;
             waiting.ShowDialog();
         }
-        if (candidate.State != CsvCandidateState.Ready || candidate.StagedPath is null) return;
+        if (candidate.State != CsvCandidateState.Ready) return;
+        if (string.Equals(Path.GetExtension(candidate.SourcePath), ".zip", StringComparison.OrdinalIgnoreCase))
+        {
+            await ImportSelectedFileAsync(candidate.SourcePath);
+            return;
+        }
+        if (candidate.StagedPath is null) return;
         await ShowImportPreviewAsync(candidate.SourcePath, candidate);
     }
 
@@ -599,7 +691,29 @@ public partial class MainWindow : Window
             CsvImportCandidate? current = _importCandidates.FirstOrDefault(item => string.Equals(item.SourcePath, candidate.SourcePath, StringComparison.OrdinalIgnoreCase));
             if (exists && current is null) _importCandidates.Insert(0, candidate);
             else if (!exists && current is not null) _importCandidates.Remove(current);
+            RebuildFileItems();
         });
+    }
+
+    private void RebuildFileItems()
+    {
+        Guid? selectedId = (ImportsListBox.SelectedItem as CsvImport)?.Id ?? _selectedImport?.Id;
+        bool wasUpdating = _updatingImports;
+        _updatingImports = true;
+        try
+        {
+            _fileItems.Clear();
+            foreach (CsvImportCandidate candidate in _importCandidates) _fileItems.Add(candidate);
+            foreach (CsvImport import in _imports) _fileItems.Add(import);
+            if (selectedId is { } id)
+            {
+                ImportsListBox.SelectedItem = _imports.FirstOrDefault(import => import.Id == id);
+            }
+        }
+        finally
+        {
+            _updatingImports = wasUpdating;
+        }
     }
 
     private void ConfigureWatchedFolders_Click(object sender, RoutedEventArgs e)
@@ -613,7 +727,7 @@ public partial class MainWindow : Window
 
     private void ConfigureFolderWatchers()
     {
-        IEnumerable<string> importedPaths = (ImportsListBox.ItemsSource as IEnumerable<CsvImport> ?? []).Select(item => item.SourcePath);
+        IEnumerable<string> importedPaths = _imports.Select(item => item.SourcePath);
         _folderWatchCoordinator?.Configure(_watchedFolders, importedPaths);
     }
 
@@ -1128,6 +1242,7 @@ public partial class MainWindow : Window
     private async Task RefreshImportsAsync()
     {
         IReadOnlyList<CsvImport> imports = await _listImportedTables.ExecuteAsync();
+        _imports = imports;
         Guid? selectedImportId = _selectedImport?.Id;
         CsvImport? selectedImport = imports.FirstOrDefault(import => import.Id == selectedImportId)
             ?? imports.FirstOrDefault();
@@ -1135,7 +1250,7 @@ public partial class MainWindow : Window
         _updatingImports = true;
         try
         {
-            ImportsListBox.ItemsSource = imports;
+            RebuildFileItems();
             ImportsListBox.SelectedItem = selectedImport;
             _selectedImport = selectedImport;
             JoinTableComboBox.ItemsSource = imports;
@@ -1308,6 +1423,11 @@ public partial class MainWindow : Window
         if (e.OriginalSource is DependencyObject source
             && ItemsControl.ContainerFromElement(listBox, source) is ListBoxItem item)
         {
+            if (item.DataContext is CsvImportCandidate)
+            {
+                e.Handled = true;
+                return;
+            }
             item.IsSelected = true;
             return;
         }
@@ -1427,7 +1547,7 @@ public partial class MainWindow : Window
         try
         {
             CsvImport? previousRight = CompareTableComboBox.SelectedItem as CsvImport;
-            CsvImport[] imports = (ImportsListBox.ItemsSource as IEnumerable<CsvImport> ?? []).ToArray();
+            CsvImport[] imports = _imports.ToArray();
             CompareLeftTableComboBox.ItemsSource = imports;
             CompareLeftTableComboBox.SelectedItem = _selectedImport is null
                 ? null
@@ -1513,7 +1633,7 @@ public partial class MainWindow : Window
             FilterComparisonFileChoices();
         };
 
-        CsvImport[] imports = (ImportsListBox.ItemsSource as IEnumerable<CsvImport> ?? []).ToArray();
+        CsvImport[] imports = _imports.ToArray();
         fileCombo.ItemsSource = imports;
         HashSet<Guid> selected = SelectedComparisonImportIds(row);
         fileCombo.SelectedItem = imports.FirstOrDefault(import => !selected.Contains(import.Id));
@@ -1534,7 +1654,7 @@ public partial class MainWindow : Window
             CompareTableComboBox,
             .. _additionalCompareFiles.Select(row => row.FileComboBox)
         ];
-        CsvImport[] imports = (ImportsListBox.ItemsSource as IEnumerable<CsvImport> ?? []).ToArray();
+        CsvImport[] imports = _imports.ToArray();
         Guid?[] selections = comboBoxes
             .Select(comboBox => (comboBox.SelectedItem as CsvImport)?.Id)
             .ToArray();
@@ -1616,7 +1736,7 @@ public partial class MainWindow : Window
         UpdateLeftComparisonKeys();
         if (!_updatingComparisonFiles && CompareLeftTableComboBox.SelectedItem is CsvImport leftImport)
         {
-            ImportsListBox.SelectedItem = ImportsListBox.Items.Cast<CsvImport>().FirstOrDefault(import => import.Id == leftImport.Id);
+            ImportsListBox.SelectedItem = _imports.FirstOrDefault(import => import.Id == leftImport.Id);
             FilterComparisonFileChoices();
         }
     }
@@ -2232,7 +2352,7 @@ public partial class MainWindow : Window
 
     private ImportRequest CreateImportRequest(string path, string displayName)
     {
-        return new ImportRequest(path, displayName, true, null, null, 5000, true);
+        return new ImportRequest(path, displayName, true, null, null, 100_000, true);
     }
 
     private async Task RunUiActionAsync(Func<Task> action, string successMessage)
@@ -2272,6 +2392,7 @@ public partial class MainWindow : Window
             CancelOperationButton.Visibility = Visibility.Collapsed;
             _operationCancellation.Dispose();
             _operationCancellation = null;
+            _databaseMaintenanceRequired = true;
             if (StatusOverlay.Visibility == Visibility.Visible)
             {
                 ScheduleStatusOverlayHide();
@@ -2334,6 +2455,235 @@ public partial class MainWindow : Window
     {
         _operationCancellation?.Cancel();
     }
+
+    private void UserActivity_PreviewMouseDown(object sender, MouseButtonEventArgs e) => RecordUserActivity();
+
+    private void UserActivity_PreviewMouseWheel(object sender, MouseWheelEventArgs e) => RecordUserActivity();
+
+    private void RecordUserActivity()
+    {
+        _lastUserActivityUtc = DateTimeOffset.UtcNow;
+        _maintenanceCancellation?.Cancel();
+    }
+
+    private async void IdleMaintenanceTimer_Tick(object? sender, EventArgs e)
+    {
+        if (_maintenanceRunning
+            || !_databaseMaintenanceRequired
+            || _currentWorkspacePath is null
+            || _activeImportCount > 0
+            || _operationCancellation is not null
+            || DateTimeOffset.UtcNow - _lastUserActivityUtc < TimeSpan.FromMinutes(5))
+        {
+            return;
+        }
+
+        string workspacePath = _currentWorkspacePath;
+        _maintenanceRunning = true;
+        CancellationTokenSource cancellation = new();
+        _maintenanceCancellation = cancellation;
+        string? optimizedCopyPath = null;
+        try
+        {
+            Log.Information("Preparing an optimized copy of workspace {WorkspacePath}", workspacePath);
+            optimizedCopyPath = await Task.Run(
+                () => _workspaceMaintenance.PrepareOptimizedCopyAsync(workspacePath, cancellation.Token),
+                cancellation.Token);
+
+            if (cancellation.IsCancellationRequested
+                || !string.Equals(_currentWorkspacePath, workspacePath, StringComparison.OrdinalIgnoreCase)
+                || _activeImportCount > 0
+                || _operationCancellation is not null
+                || DateTimeOffset.UtcNow - _lastUserActivityUtc < TimeSpan.FromMinutes(5))
+            {
+                return;
+            }
+
+            bool replaced = await Task.Run(
+                () => _workspaceMaintenance.TryReplaceWithOptimizedCopyAsync(workspacePath, optimizedCopyPath, cancellation.Token),
+                cancellation.Token);
+            if (replaced)
+            {
+                _databaseMaintenanceRequired = false;
+                Log.Information("Replaced workspace with its optimized copy: {WorkspacePath}", workspacePath);
+            }
+            else
+            {
+                _lastUserActivityUtc = DateTimeOffset.UtcNow;
+                Log.Information("Workspace optimization swap was deferred because the database was in use: {WorkspacePath}", workspacePath);
+            }
+        }
+        catch (OperationCanceledException)
+        {
+            Log.Information("Workspace optimization was canceled after user activity");
+        }
+        catch (Exception ex)
+        {
+            _lastUserActivityUtc = DateTimeOffset.UtcNow;
+            Log.Warning(ex, "Could not optimize workspace {WorkspacePath}", workspacePath);
+        }
+        finally
+        {
+            if (optimizedCopyPath is not null) _workspaceMaintenance.DiscardOptimizedCopy(optimizedCopyPath);
+            if (ReferenceEquals(_maintenanceCancellation, cancellation)) _maintenanceCancellation = null;
+            cancellation.Dispose();
+            _maintenanceRunning = false;
+        }
+    }
+
+    private async Task OptimizeWorkspaceNowAsync()
+    {
+        if (_currentWorkspacePath is null)
+        {
+            ShowStatusMessage("Najpierw otwórz workspace");
+            return;
+        }
+        if (_maintenanceRunning || _activeImportCount > 0 || _operationCancellation is not null)
+        {
+            ShowStatusMessage("Optymalizacja nie może teraz wystartować — poczekaj na zakończenie bieżącej operacji");
+            return;
+        }
+
+        string workspacePath = _currentWorkspacePath;
+        _maintenanceRunning = true;
+        CancellationTokenSource cancellation = new();
+        _maintenanceCancellation = cancellation;
+        string? optimizedCopyPath = null;
+        try
+        {
+            ShowStatusMessage("Przygotowywanie zoptymalizowanej kopii bazy…", autoHide: false);
+            optimizedCopyPath = await Task.Run(
+                () => _workspaceMaintenance.PrepareOptimizedCopyAsync(workspacePath, cancellation.Token),
+                cancellation.Token);
+
+            cancellation.Token.ThrowIfCancellationRequested();
+            if (!string.Equals(_currentWorkspacePath, workspacePath, StringComparison.OrdinalIgnoreCase)
+                || _activeImportCount > 0
+                || _operationCancellation is not null)
+            {
+                ShowStatusMessage("Podmiana bazy została odłożona");
+                return;
+            }
+
+            bool replaced = await Task.Run(
+                () => _workspaceMaintenance.TryReplaceWithOptimizedCopyAsync(workspacePath, optimizedCopyPath, cancellation.Token),
+                cancellation.Token);
+            if (replaced)
+            {
+                _databaseMaintenanceRequired = false;
+                ShowStatusMessage("Workspace został zoptymalizowany");
+                Log.Information("Workspace was manually optimized: {WorkspacePath}", workspacePath);
+            }
+            else
+            {
+                _lastUserActivityUtc = DateTimeOffset.UtcNow;
+                ShowStatusMessage("Baza jest używana — podmiana została odłożona");
+            }
+        }
+        catch (OperationCanceledException)
+        {
+            ShowStatusMessage("Optymalizacja została przerwana");
+        }
+        catch (Exception ex)
+        {
+            _lastUserActivityUtc = DateTimeOffset.UtcNow;
+            ShowStatusMessage("Nie udało się zoptymalizować workspace");
+            Log.Warning(ex, "Could not manually optimize workspace {WorkspacePath}", workspacePath);
+        }
+        finally
+        {
+            if (optimizedCopyPath is not null) _workspaceMaintenance.DiscardOptimizedCopy(optimizedCopyPath);
+            if (ReferenceEquals(_maintenanceCancellation, cancellation)) _maintenanceCancellation = null;
+            cancellation.Dispose();
+            _maintenanceRunning = false;
+        }
+    }
+
+    private void MainWindow_PreviewKeyDown(object sender, KeyEventArgs e)
+    {
+        RecordUserActivity();
+        ModifierKeys modifiers = Keyboard.Modifiers;
+        if (modifiers == (ModifierKeys.Control | ModifierKeys.Shift) && e.Key == Key.O)
+        {
+            _ = OptimizeWorkspaceNowAsync();
+            e.Handled = true;
+        }
+        else if (modifiers == ModifierKeys.Control && e.Key == Key.K)
+        {
+            ShowCommandPalette();
+            e.Handled = true;
+        }
+        else if (e.Key == Key.F1 && modifiers == ModifierKeys.None)
+        {
+            ShowShortcuts();
+            e.Handled = true;
+        }
+        else if (modifiers == ModifierKeys.Control && e.Key == Key.O)
+        {
+            ChooseCsv_Click(this, new RoutedEventArgs());
+            e.Handled = true;
+        }
+        else if (modifiers == ModifierKeys.Control && e.Key == Key.N)
+        {
+            _ = CreateNewWorkspaceAsync();
+            e.Handled = true;
+        }
+        else if (modifiers == ModifierKeys.Control && e.Key == Key.E && CanExportCurrentResult())
+        {
+            ExportTable_Click(this, new RoutedEventArgs());
+            e.Handled = true;
+        }
+        else if (modifiers == ModifierKeys.Control && e.Key == Key.R && _selectedImport is not null)
+        {
+            RefreshTable_Click(this, new RoutedEventArgs());
+            e.Handled = true;
+        }
+        else if (modifiers == ModifierKeys.Control && e.Key is >= Key.D1 and <= Key.D5)
+        {
+            WorkspaceModeTabControl.SelectedIndex = e.Key - Key.D1;
+            e.Handled = true;
+        }
+    }
+
+    private bool CanExportCurrentResult() =>
+        _selectedImport is not null || _adHocTableName is not null || !string.IsNullOrWhiteSpace(_sqlResultQuery);
+
+    private void ShowCommandPalette_Click(object sender, RoutedEventArgs e) => ShowCommandPalette();
+
+    private void ShowShortcuts_Click(object sender, RoutedEventArgs e) => ShowShortcuts();
+
+    private void ShowCommandPalette()
+    {
+        CommandPaletteWindow palette = new(CreatePaletteCommands()) { Owner = this };
+        palette.ShowDialog();
+    }
+
+    private void ShowShortcuts()
+    {
+        ShortcutsWindow shortcuts = new() { Owner = this };
+        shortcuts.ShowDialog();
+    }
+
+    private IReadOnlyList<PaletteCommand> CreatePaletteCommands() =>
+    [
+        new("Dodaj plik CSV", "Plik", "Ctrl+O", true, () => ChooseCsv_Click(this, new RoutedEventArgs())),
+        new("Utwórz nowy workspace", "Workspace", "Ctrl+N", true, () => _ = CreateNewWorkspaceAsync()),
+        new("Optymalizuj workspace", "Workspace", "Ctrl+Shift+O", _currentWorkspacePath is not null && !_maintenanceRunning,
+            () => _ = OptimizeWorkspaceNowAsync()),
+        new("Obserwowane foldery", "Plik", null, true, () => ConfigureWatchedFolders_Click(this, new RoutedEventArgs())),
+        new("Odśwież dane", "Dane", "Ctrl+R", _selectedImport is not null, () => RefreshTable_Click(this, new RoutedEventArgs())),
+        new("Eksportuj bieżący wynik", "Dane", "Ctrl+E", CanExportCurrentResult(), () => ExportTable_Click(this, new RoutedEventArgs())),
+        new("Przejdź do: Przeglądaj", "Widok", "Ctrl+1", true, () => WorkspaceModeTabControl.SelectedIndex = 0),
+        new("Przejdź do: Duplikaty", "Widok", "Ctrl+2", true, () => WorkspaceModeTabControl.SelectedIndex = 1),
+        new("Przejdź do: Porównaj", "Widok", "Ctrl+3", true, () => WorkspaceModeTabControl.SelectedIndex = 2),
+        new("Przejdź do: Połącz", "Widok", "Ctrl+4", true, () => WorkspaceModeTabControl.SelectedIndex = 3),
+        new("Przejdź do: SQL", "Widok", "Ctrl+5", true, () => WorkspaceModeTabControl.SelectedIndex = 4),
+        new(_filesPanelMode == FilesPanelMode.Collapsed ? "Rozwiń panel plików" : "Zwiń panel plików", "Widok", null, true,
+            () => SetFilesPanelMode(_filesPanelMode == FilesPanelMode.Collapsed ? FilesPanelMode.Expanded : FilesPanelMode.Collapsed)),
+        new("Otwórz folder logów", "Pomoc", null, true, () => OpenLogs_Click(this, new RoutedEventArgs())),
+        new("Pokaż wszystkie skróty", "Pomoc", "F1", true, ShowShortcuts),
+        new("O programie", "Pomoc", null, true, () => ShowAbout_Click(this, new RoutedEventArgs()))
+    ];
 
     private void OpenLogs_Click(object sender, RoutedEventArgs e)
     {

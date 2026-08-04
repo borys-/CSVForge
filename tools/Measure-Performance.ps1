@@ -1,14 +1,15 @@
 param(
     [string]$DataDirectory = (Join-Path $PSScriptRoot '..\artifacts\performance-data'),
-    [string]$ResultPath = (Join-Path $PSScriptRoot '..\artifacts\performance-results.csv')
+    [string]$ResultPath = (Join-Path $PSScriptRoot '..\artifacts\performance-results.csv'),
+    [int[]]$RowCounts = @(10000, 50000, 100000)
 )
 
 $repoRoot = [System.IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..'))
 $cli = Join-Path $repoRoot 'src\CSVForge.Cli\bin\Release\net10.0\CSVForge.Cli.dll'
 dotnet build (Join-Path $repoRoot 'CSVForge.sln') --configuration Release | Out-Host
-& (Join-Path $PSScriptRoot 'Generate-PerformanceData.ps1') -OutputDirectory $DataDirectory
+& (Join-Path $PSScriptRoot 'Generate-PerformanceData.ps1') -OutputDirectory $DataDirectory -RowCounts $RowCounts
 
-$results = foreach ($rowCount in 10000, 50000, 100000) {
+$results = foreach ($rowCount in $RowCounts) {
     $workspace = Join-Path $DataDirectory "benchmark-$rowCount.db"
     if (Test-Path -LiteralPath $workspace) { Remove-Item -LiteralPath $workspace -Force }
     dotnet $cli workspace --action create --path $workspace | Out-Null

@@ -6,9 +6,10 @@ public sealed record ImportRequest(
     bool HasHeader,
     char? Delimiter,
     string? EncodingName,
-    int BatchSize = 5000,
+    int BatchSize = 100_000,
     bool AutoDetectHeader = false,
     IReadOnlyList<CsvColumnMapping>? ColumnMappings = null,
     string? SourcePath = null,
     string? StagingDatabasePath = null,
-    string? StagingTableName = null);
+    string? StagingTableName = null,
+    bool TrimFields = true);

@@ -308,6 +308,36 @@ public sealed class CsvImporterServiceTests
     }
 
     [Fact]
+    public async Task ImportCsvUseCase_TrimsLeadingAndTrailingWhitespaceByDefault()
+    {
+        (ServiceProvider provider, string csvPath) = await CreateWorkspaceAndCsvAsync(
+            "Name;City\r\n  Ada  ;\tWarszawa \t\r\n");
+
+        ImportResult result = await provider.GetRequiredService<IImportCsvUseCase>()
+            .ExecuteAsync(new ImportRequest(csvPath, "People", true, null, null));
+
+        TablePage page = await provider.GetRequiredService<IBrowseTableUseCase>().ExecuteAsync(
+            new BrowseTableRequest(result.Import.TableName, 10, 0, null, false));
+        Assert.Equal("Ada", page.Rows[0]["Name"]);
+        Assert.Equal("Warszawa", page.Rows[0]["City"]);
+    }
+
+    [Fact]
+    public async Task ImportCsvUseCase_PreservesWhitespaceWhenTrimmingIsDisabled()
+    {
+        (ServiceProvider provider, string csvPath) = await CreateWorkspaceAndCsvAsync(
+            "Name;City\r\n  Ada  ; Warszawa \r\n");
+
+        ImportResult result = await provider.GetRequiredService<IImportCsvUseCase>()
+            .ExecuteAsync(new ImportRequest(csvPath, "People", true, null, null, TrimFields: false));
+
+        TablePage page = await provider.GetRequiredService<IBrowseTableUseCase>().ExecuteAsync(
+            new BrowseTableRequest(result.Import.TableName, 10, 0, null, false));
+        Assert.Equal("  Ada  ", page.Rows[0]["Name"]);
+        Assert.Equal(" Warszawa ", page.Rows[0]["City"]);
+    }
+
+    [Fact]
     public async Task ImportCsvUseCase_PromotesPreparedSqliteTableWithoutReparsingChangedCsv()
     {
         (ServiceProvider provider, string csvPath) = await CreateWorkspaceAndCsvAsync("Id;Name\r\n1;Ada\r\n2;Ola\r\n");

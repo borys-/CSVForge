@@ -1,0 +1,41 @@
+<Window x:Class="CSVForge.App.Wpf.CommandPaletteWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Paleta poleceń" Width="620" Height="480" MinWidth="480" MinHeight="360"
+        WindowStartupLocation="CenterOwner" ShowInTaskbar="False" ResizeMode="CanResizeWithGrip"
+        PreviewKeyDown="Window_PreviewKeyDown">
+    <Border Margin="16" Background="{StaticResource SurfaceBrush}" BorderBrush="{StaticResource BorderBrush}"
+            BorderThickness="1" CornerRadius="10" Padding="14">
+        <DockPanel>
+            <TextBlock DockPanel.Dock="Bottom" Margin="2,10,2,0" Foreground="{StaticResource TextMutedBrush}"
+                       Text="↑↓ wybór   •   Enter uruchom   •   Esc zamknij" />
+            <StackPanel DockPanel.Dock="Top">
+                <TextBlock Text="Co chcesz zrobić?" FontSize="18" FontWeight="SemiBold" Margin="2,0,0,10" />
+                <TextBox x:Name="SearchTextBox" FontSize="15" MinHeight="42" Padding="12,8"
+                         TextChanged="SearchTextBox_TextChanged" />
+            </StackPanel>
+            <ListBox x:Name="CommandsListBox" Margin="0,10,0,0" MouseDoubleClick="CommandsListBox_MouseDoubleClick">
+                <ListBox.ItemTemplate>
+                    <DataTemplate>
+                        <Grid Margin="2">
+                            <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                            <StackPanel>
+                                <TextBlock Text="{Binding Name}" FontWeight="SemiBold" />
+                                <TextBlock Text="{Binding Category}" FontSize="11" Foreground="{StaticResource TextMutedBrush}" />
+                            </StackPanel>
+                            <Border Grid.Column="1" Background="{StaticResource SurfaceMutedBrush}" CornerRadius="4" Padding="8,3"
+                                    VerticalAlignment="Center">
+                                <TextBlock Text="{Binding Shortcut}" Foreground="{StaticResource TextMutedBrush}" />
+                            </Border>
+                        </Grid>
+                    </DataTemplate>
+                </ListBox.ItemTemplate>
+                <ListBox.ItemContainerStyle>
+                    <Style TargetType="ListBoxItem" BasedOn="{StaticResource {x:Type ListBoxItem}}">
+                        <Setter Property="IsEnabled" Value="{Binding IsEnabled}" />
+                    </Style>
+                </ListBox.ItemContainerStyle>
+            </ListBox>
+        </DockPanel>
+    </Border>
+</Window>

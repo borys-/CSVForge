@@ -14,6 +14,7 @@ public static class DependencyInjection
     {
         services.AddSingleton<IWorkspaceContext, WorkspaceContext>();
         services.AddSingleton<IWorkspaceService, SqliteWorkspaceService>();
+        services.AddSingleton<IWorkspaceMaintenanceService, SqliteWorkspaceMaintenanceService>();
         services.AddSingleton<ICsvReader, CsvReaderService>();
         services.AddSingleton<ICsvImporter, CsvImporterService>();
         services.AddSingleton<ICsvStagingService, SqliteCsvStagingService>();

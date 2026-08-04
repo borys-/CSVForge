@@ -33,6 +33,9 @@
                     <ComboBoxItem Content="Pierwszy wiersz" Tag="Yes" />
                     <ComboBoxItem Content="Brak nagłówka" Tag="No" />
                 </ComboBox>
+                <CheckBox x:Name="TrimFieldsCheckBox" Grid.Column="4" Content="Usuń białe znaki z początku i końca pól"
+                          IsChecked="True" Margin="20,0,0,0" VerticalAlignment="Center"
+                          Click="TrimFields_Changed" />
             </Grid>
         </Border>
 

@@ -34,7 +34,7 @@ internal sealed class CsvFolderWatchCoordinator : IDisposable
         RemoveInvalidCandidates();
         foreach (WatchedFolderSetting setting in _settings.Where(item => item.IsEnabled && Directory.Exists(item.Path)))
         {
-            FileSystemWatcher watcher = new(setting.Path, "*.csv") { IncludeSubdirectories = false, NotifyFilter = NotifyFilters.FileName | NotifyFilters.Size | NotifyFilters.LastWrite };
+            FileSystemWatcher watcher = new(setting.Path) { IncludeSubdirectories = false, NotifyFilter = NotifyFilters.FileName | NotifyFilters.Size | NotifyFilters.LastWrite };
             watcher.Created += (_, e) => Queue(e.FullPath, setting.Path);
             watcher.Changed += (_, e) => Queue(e.FullPath, setting.Path, force: true);
             watcher.Renamed += (_, e) => Queue(e.FullPath, setting.Path);
@@ -66,13 +66,13 @@ internal sealed class CsvFolderWatchCoordinator : IDisposable
     {
         foreach (WatchedFolderSetting setting in _settings.Where(item => item.IsEnabled && Directory.Exists(item.Path)))
         {
-            foreach (string path in Directory.EnumerateFiles(setting.Path, "*.csv", SearchOption.TopDirectoryOnly)) Queue(path, setting.Path);
+            foreach (string path in Directory.EnumerateFiles(setting.Path, "*", SearchOption.TopDirectoryOnly).Where(IsImportFile)) Queue(path, setting.Path);
         }
     }
 
     private void Queue(string path, string folder, bool force = false)
     {
-        if (!string.Equals(Path.GetExtension(path), ".csv", StringComparison.OrdinalIgnoreCase)) return;
+        if (!IsImportFile(path)) return;
         string normalized = Normalize(path);
         if (_importedPaths.Contains(normalized)) { Remove(path); return; }
         CsvImportCandidate candidate = _candidates.GetOrAdd(normalized, _ => new CsvImportCandidate(Path.GetFullPath(path), folder));
@@ -87,6 +87,12 @@ internal sealed class CsvFolderWatchCoordinator : IDisposable
         try
         {
             await WaitUntilStableAsync(candidate.SourcePath, cancellationToken);
+            if (string.Equals(Path.GetExtension(candidate.SourcePath), ".zip", StringComparison.OrdinalIgnoreCase))
+            {
+                candidate.State = CsvCandidateState.Ready;
+                candidate.Error = null;
+                return;
+            }
             string stagingDirectory = Path.Combine(Path.GetTempPath(), "CSVForge", "staging");
             Directory.CreateDirectory(stagingDirectory);
             string stagedPath = Path.Combine(stagingDirectory, $"{Guid.NewGuid():N}.csv");
@@ -130,6 +136,13 @@ internal sealed class CsvFolderWatchCoordinator : IDisposable
             await Task.Delay(500, cancellationToken);
         }
         throw new IOException("Plik nie jest jeszcze gotowy do odczytu.");
+    }
+
+    private static bool IsImportFile(string path)
+    {
+        string extension = Path.GetExtension(path);
+        return File.Exists(path) && (string.Equals(extension, ".csv", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(extension, ".zip", StringComparison.OrdinalIgnoreCase));
     }
 
     private async Task PeriodicScanAsync(PeriodicTimer timer, CancellationToken cancellationToken)

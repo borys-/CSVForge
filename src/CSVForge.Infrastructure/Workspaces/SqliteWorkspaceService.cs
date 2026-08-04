@@ -112,7 +112,6 @@ internal sealed class SqliteWorkspaceService(IWorkspaceContext workspaceContext)
         deleteCommand.Parameters.AddWithValue("$id", importId.ToString());
         await deleteCommand.ExecuteNonQueryAsync(cancellationToken);
         await transaction.CommitAsync(cancellationToken);
-        await SqliteDatabaseMaintenance.CompactAsync(connection, CancellationToken.None);
     }
 
     public async Task RenameImportAsync(Guid importId, string displayName, CancellationToken cancellationToken)

@@ -35,17 +35,17 @@ internal sealed class CsvReaderService : ICsvReader
                 return new CsvPreview(columns, rows, errors);
             }
 
-            string[] firstRecord = csv.Parser.Record ?? [];
+            string[] firstRecord = NormalizeRecord(csv.Parser.Record ?? [], request.TrimFields);
             string[]? secondRecord = null;
             int trailingEmptyColumns = 0;
             bool hasHeader = request.HasHeader;
             if (request.AutoDetectHeader && await csv.ReadAsync())
             {
-                secondRecord = csv.Parser.Record ?? [];
+                secondRecord = NormalizeRecord(csv.Parser.Record ?? [], request.TrimFields);
                 if (CsvHeaderDetector.LooksLikeReportPreamble(firstRecord, secondRecord))
                 {
                     firstRecord = secondRecord;
-                    secondRecord = await csv.ReadAsync() ? csv.Parser.Record ?? [] : null;
+                    secondRecord = await csv.ReadAsync() ? NormalizeRecord(csv.Parser.Record ?? [], request.TrimFields) : null;
                 }
 
                 if (secondRecord is not null)
@@ -77,7 +77,7 @@ internal sealed class CsvReaderService : ICsvReader
             while (rows.Count < rowLimit && await csv.ReadAsync())
             {
                 cancellationToken.ThrowIfCancellationRequested();
-                string[] record = csv.Parser.Record ?? [];
+                string[] record = NormalizeRecord(csv.Parser.Record ?? [], request.TrimFields);
                 rows.Add(CsvHeaderDetector.TrimTrailingEmptyColumns(record, trailingEmptyColumns));
             }
         }
@@ -88,6 +88,9 @@ internal sealed class CsvReaderService : ICsvReader
 
         return new CsvPreview(columns, rows, errors);
     }
+
+    private static string[] NormalizeRecord(string[] record, bool trimFields) =>
+        trimFields ? record.Select(value => value.Trim()).ToArray() : record;
 
     private static CsvConfiguration CreateConfiguration(char delimiter)
     {

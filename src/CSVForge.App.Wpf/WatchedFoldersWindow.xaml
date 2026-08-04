@@ -4,7 +4,7 @@
         WindowStartupLocation="CenterOwner" Background="#F5F7FB">
     <Grid Margin="16">
         <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="*"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
-        <TextBlock Text="Foldery z plikami CSV" FontSize="19" FontWeight="SemiBold" Margin="0,0,0,12"/>
+        <TextBlock Text="Foldery z plikami CSV i ZIP" FontSize="19" FontWeight="SemiBold" Margin="0,0,0,12"/>
         <DataGrid x:Name="FoldersGrid" Grid.Row="1" AutoGenerateColumns="False" CanUserAddRows="False" SelectionMode="Single">
             <DataGrid.Columns>
                 <DataGridCheckBoxColumn Header="Aktywny" Binding="{Binding IsEnabled, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" Width="80"/>

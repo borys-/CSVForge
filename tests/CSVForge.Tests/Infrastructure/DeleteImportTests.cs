@@ -36,6 +36,6 @@ public sealed class DeleteImportTests
 
         command.Parameters.Clear();
         command.CommandText = "PRAGMA freelist_count;";
-        Assert.Equal(0L, (long)(await command.ExecuteScalarAsync() ?? -1L));
+        Assert.True((long)(await command.ExecuteScalarAsync() ?? 0L) > 0L);
     }
 }

@@ -1,11 +1,12 @@
 param(
-    [string]$OutputDirectory = (Join-Path $PSScriptRoot '..\artifacts\performance-data')
+    [string]$OutputDirectory = (Join-Path $PSScriptRoot '..\artifacts\performance-data'),
+    [int[]]$RowCounts = @(10000, 50000, 100000)
 )
 
 $resolvedOutput = [System.IO.Path]::GetFullPath($OutputDirectory)
 [System.IO.Directory]::CreateDirectory($resolvedOutput) | Out-Null
 
-foreach ($rowCount in 10000, 50000, 100000) {
+foreach ($rowCount in $RowCounts) {
     $path = Join-Path $resolvedOutput "people-$rowCount.csv"
     $writer = [System.IO.StreamWriter]::new($path, $false, [System.Text.UTF8Encoding]::new($true))
     try {

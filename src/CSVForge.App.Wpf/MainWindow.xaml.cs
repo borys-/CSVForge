@@ -92,6 +92,7 @@ public partial class MainWindow : Window
     private bool _updatingImports;
     private bool _updatingComparisonFiles;
     private bool _handlingDroppedFiles;
+    private string _exportNameTemplate = ExportNameTemplate.Default;
     private FilesPanelMode _filesPanelMode = FilesPanelMode.Expanded;
     private double _expandedFilesPanelWidth = 300;
     private int _activeImportCount;
@@ -1185,11 +1186,17 @@ public partial class MainWindow : Window
             return;
         }
 
-        ExportResultWindow options = new(columns) { Owner = this };
+        long recordCount = sourceSql is not null && !_sqlResultPagingEnabled
+            ? DataGrid.Items.Count
+            : _totalRows;
+        ExportResultWindow options = new(columns, recordCount, _exportNameTemplate) { Owner = this };
         if (options.ShowDialog() != true)
         {
             return;
         }
+
+        _exportNameTemplate = options.NameTemplate;
+        SaveFilesPanelPreferences();
 
         if (!options.ExportToCsv)
         {
@@ -1219,7 +1226,7 @@ public partial class MainWindow : Window
             Filter = "CSV files (*.csv)|*.csv|All files (*.*)|*.*",
             DefaultExt = ".csv",
             AddExtension = true,
-            FileName = sourceSql is null ? $"{tableName}.csv" : "wynik_sql.csv",
+            FileName = $"{options.SuggestedFileName}.csv",
             Title = "Eksportuj dane do CSV"
         };
 
@@ -1524,6 +1531,9 @@ public partial class MainWindow : Window
             {
                 _filesPanelMode = mode;
                 _expandedFilesPanelWidth = Math.Clamp(preferences.ExpandedFilesPanelWidth, 240, 600);
+                _exportNameTemplate = string.IsNullOrWhiteSpace(preferences.ExportNameTemplate)
+                    ? ExportNameTemplate.Default
+                    : preferences.ExportNameTemplate;
             }
         }
         catch (Exception ex) when (ex is JsonException or IOException or UnauthorizedAccessException)
@@ -1537,7 +1547,7 @@ public partial class MainWindow : Window
         try
         {
             Directory.CreateDirectory(AppPaths.DataDirectory);
-            UiPreferences preferences = new(_filesPanelMode.ToString(), _expandedFilesPanelWidth);
+            UiPreferences preferences = new(_filesPanelMode.ToString(), _expandedFilesPanelWidth, _exportNameTemplate);
             File.WriteAllText(UiPreferencesPath, JsonSerializer.Serialize(preferences));
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
@@ -1871,6 +1881,27 @@ public partial class MainWindow : Window
                 .ToString(CultureInfo.InvariantCulture);
         }
         DataGrid.ItemsSource = numberedRows;
+    }
+
+    private void DeletableListBox_PreviewKeyDown(object sender, KeyEventArgs e)
+    {
+        if (e.Key != Key.Delete || Keyboard.Modifiers != ModifierKeys.None)
+        {
+            return;
+        }
+
+        if (ReferenceEquals(sender, OperationsListBox)
+            && OperationsListBox.SelectedItem is WorkspaceOperation)
+        {
+            e.Handled = true;
+            DeleteOperation_Click(sender, new RoutedEventArgs());
+        }
+        else if (ReferenceEquals(sender, ImportsListBox)
+            && ImportsListBox.SelectedItem is CsvImport)
+        {
+            e.Handled = true;
+            DeleteImport_Click(sender, new RoutedEventArgs());
+        }
     }
 
     private static List<WatchedFolderSetting> LoadWatchedFolders()
@@ -2815,7 +2846,7 @@ public partial class MainWindow : Window
         Expanded
     }
 
-    private sealed record UiPreferences(string FilesPanelMode, double ExpandedFilesPanelWidth);
+    private sealed record UiPreferences(string FilesPanelMode, double ExpandedFilesPanelWidth, string? ExportNameTemplate = null);
     private sealed record WatchedFolderPreference(string Path, bool IsEnabled);
 
     private sealed record AdditionalCompareFileRow(

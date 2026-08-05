@@ -99,7 +99,8 @@
                         <Expander DockPanel.Dock="Bottom" Header="Historia operacji" Margin="0,10,0,0" IsExpanded="False">
                             <Border Background="{StaticResource SurfaceMutedBrush}" BorderBrush="{StaticResource BorderBrush}" BorderThickness="1" CornerRadius="6" Margin="0,6,0,0" Height="150">
                                 <ListBox x:Name="OperationsListBox" SelectionChanged="OperationsListBox_SelectionChanged"
-                                         PreviewMouseRightButtonDown="ListBox_PreviewMouseRightButtonDown">
+                                         PreviewMouseRightButtonDown="ListBox_PreviewMouseRightButtonDown"
+                                         PreviewKeyDown="DeletableListBox_PreviewKeyDown">
                                     <ListBox.ContextMenu>
                                         <ContextMenu>
                                             <MenuItem Header="Eksportuj" Click="ExportTable_Click" />
@@ -118,6 +119,7 @@
 
                         <ListBox x:Name="ImportsListBox" SelectionChanged="ImportsListBox_SelectionChanged"
                                  HorizontalContentAlignment="Stretch" PreviewMouseRightButtonDown="ListBox_PreviewMouseRightButtonDown"
+                                 PreviewKeyDown="DeletableListBox_PreviewKeyDown"
                                  AllowDrop="True" DragEnter="FilesDropArea_DragEnter" DragOver="FilesDropArea_DragOver"
                                  DragLeave="FilesDropArea_DragLeave" Drop="FilesDropArea_Drop">
                             <ListBox.ContextMenu>

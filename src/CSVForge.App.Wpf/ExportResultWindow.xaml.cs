@@ -1,13 +1,21 @@
 using System.Windows;
 using System.Windows.Controls;
+using CSVForge.Application.Export;
 
 namespace CSVForge.App.Wpf;
 
 public partial class ExportResultWindow : Window
 {
-    public ExportResultWindow(IEnumerable<string> columns)
+    private readonly long _recordCount;
+    private readonly DateTimeOffset _timestamp;
+
+    public ExportResultWindow(IEnumerable<string> columns, long recordCount, string nameTemplate)
     {
+        _recordCount = recordCount;
+        _timestamp = DateTimeOffset.Now;
         InitializeComponent();
+        NameTemplateTextBox.Text = string.IsNullOrWhiteSpace(nameTemplate) ? ExportNameTemplate.Default : nameTemplate;
+        UpdateNamePreview();
         foreach (string column in columns)
         {
             ColumnsPanel.Children.Add(new CheckBox
@@ -23,6 +31,10 @@ public partial class ExportResultWindow : Window
 
     public string TargetTableName => TableNameTextBox.Text.Trim();
 
+    public string NameTemplate => NameTemplateTextBox.Text.Trim();
+
+    public string SuggestedFileName => ExportNameTemplate.ForFile(NameTemplate, _recordCount, _timestamp);
+
     public IReadOnlyList<string> SelectedColumns => ColumnsPanel.Children
         .OfType<CheckBox>()
         .Where(checkBox => checkBox.IsChecked == true)
@@ -36,6 +48,17 @@ public partial class ExportResultWindow : Window
         {
             TableNamePanel.IsEnabled = TableRadioButton.IsChecked == true;
         }
+    }
+
+    private void NameTemplate_Changed(object sender, TextChangedEventArgs e) => UpdateNamePreview();
+
+    private void UpdateNamePreview()
+    {
+        if (NamePreviewText is null || TableNameTextBox is null) return;
+        string fileName = ExportNameTemplate.ForFile(NameTemplateTextBox.Text, _recordCount, _timestamp);
+        string tableName = ExportNameTemplate.ForTable(NameTemplateTextBox.Text, _recordCount, _timestamp);
+        NamePreviewText.Text = $"Plik: {fileName}.csv   •   Tabela: {tableName}";
+        TableNameTextBox.Text = tableName;
     }
 
     private void SelectAll_Click(object sender, RoutedEventArgs e) => SetAllColumns(true);

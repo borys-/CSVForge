@@ -1,0 +1,34 @@
+<Window x:Class="CSVForge.App.Wpf.SettingsWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Ustawienia" Width="560" Height="300"
+        WindowStartupLocation="CenterOwner" ResizeMode="NoResize"
+        Background="#F5F7FB">
+    <Grid Margin="20">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+            <RowDefinition Height="Auto" />
+        </Grid.RowDefinitions>
+
+        <TextBlock Text="Ustawienia" FontSize="22" FontWeight="SemiBold" />
+
+        <Border Grid.Row="1" Margin="0,16,0,16" Padding="16" Background="White"
+                BorderBrush="#D8DEE9" BorderThickness="1" CornerRadius="8">
+            <StackPanel>
+                <TextBlock Text="Domyślny szablon nazwy eksportu" FontWeight="SemiBold" />
+                <TextBox x:Name="ExportNameTemplateTextBox" Margin="0,9,0,6" Height="32"
+                         VerticalContentAlignment="Center" TextChanged="Template_Changed" />
+                <TextBlock Text="Zmienne: {liczba_rekordów}, {data}, {godzina}, {minuta}"
+                           Foreground="#667085" FontSize="11" />
+                <TextBlock x:Name="PreviewText" Margin="0,9,0,0" Foreground="#344054" />
+            </StackPanel>
+        </Border>
+
+        <StackPanel Grid.Row="2" Orientation="Horizontal" HorizontalAlignment="Right">
+            <Button Content="Anuluj" MinWidth="90" Margin="0,0,8,0" IsCancel="True" />
+            <Button Content="Zapisz" MinWidth="100" IsDefault="True"
+                    Background="#2563EB" Foreground="White" Click="Save_Click" />
+        </StackPanel>
+    </Grid>
+</Window>

@@ -21,7 +21,7 @@ public sealed class ExportNameTemplateTests
 
         string result = ExportNameTemplate.ForTable("{liczba_rekordów} raport/{data}", 12, timestamp);
 
-        Assert.Equal("_12_raport_2026_08_05", result);
+        Assert.Equal("export_12_raport_2026_08_05", result);
     }
 
     [Fact]

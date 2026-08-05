@@ -1189,14 +1189,14 @@ public partial class MainWindow : Window
         long recordCount = sourceSql is not null && !_sqlResultPagingEnabled
             ? DataGrid.Items.Count
             : _totalRows;
-        ExportResultWindow options = new(columns, recordCount, _exportNameTemplate) { Owner = this };
+        DateTimeOffset exportTimestamp = DateTimeOffset.Now;
+        string suggestedFileName = ExportNameTemplate.ForFile(_exportNameTemplate, recordCount, exportTimestamp);
+        string suggestedTableName = ExportNameTemplate.ForTable(_exportNameTemplate, recordCount, exportTimestamp);
+        ExportResultWindow options = new(columns, suggestedTableName) { Owner = this };
         if (options.ShowDialog() != true)
         {
             return;
         }
-
-        _exportNameTemplate = options.NameTemplate;
-        SaveFilesPanelPreferences();
 
         if (!options.ExportToCsv)
         {
@@ -1226,7 +1226,7 @@ public partial class MainWindow : Window
             Filter = "CSV files (*.csv)|*.csv|All files (*.*)|*.*",
             DefaultExt = ".csv",
             AddExtension = true,
-            FileName = $"{options.SuggestedFileName}.csv",
+            FileName = $"{suggestedFileName}.csv",
             Title = "Eksportuj dane do CSV"
         };
 
@@ -2732,6 +2732,7 @@ public partial class MainWindow : Window
         new(_filesPanelMode == FilesPanelMode.Collapsed ? "Rozwiń panel plików" : "Zwiń panel plików", "Widok", null, true,
             () => SetFilesPanelMode(_filesPanelMode == FilesPanelMode.Collapsed ? FilesPanelMode.Expanded : FilesPanelMode.Collapsed)),
         new("Otwórz folder logów", "Pomoc", null, true, () => OpenLogs_Click(this, new RoutedEventArgs())),
+        new("Ustawienia", "Aplikacja", null, true, () => ShowSettings_Click(this, new RoutedEventArgs())),
         new("Pokaż wszystkie skróty", "Pomoc", "F1", true, ShowShortcuts),
         new("O programie", "Pomoc", null, true, () => ShowAbout_Click(this, new RoutedEventArgs()))
     ];
@@ -2747,6 +2748,15 @@ public partial class MainWindow : Window
         MessageBox.Show(this,
             "CSVForge\n\nAutor:\nBorys Patyk\nborys.patyk@gmail.com",
             "O programie CSVForge", MessageBoxButton.OK, MessageBoxImage.Information);
+    }
+
+    private void ShowSettings_Click(object sender, RoutedEventArgs e)
+    {
+        SettingsWindow settings = new(_exportNameTemplate) { Owner = this };
+        if (settings.ShowDialog() != true) return;
+        _exportNameTemplate = settings.ExportNameTemplateValue;
+        SaveFilesPanelPreferences();
+        ShowStatusMessage("Ustawienia zapisane");
     }
 
     private static string PolishErrorMessage(Exception exception)

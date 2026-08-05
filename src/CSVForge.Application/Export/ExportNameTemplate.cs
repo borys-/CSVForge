@@ -35,7 +35,7 @@ public static class ExportNameTemplate
 
         string result = builder.ToString().Trim('_');
         if (result.Length == 0) result = "export";
-        if (char.IsDigit(result[0])) result = "_" + result;
+        if (char.IsDigit(result[0])) result = "export_" + result;
         return result.Length <= 64 ? result : result[..64];
     }
 }

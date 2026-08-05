@@ -1,6 +1,5 @@
 using System.Collections.ObjectModel;
 using System.ComponentModel;
-using System.Diagnostics;
 using System.Globalization;
 using System.IO;
 using System.Text.Json;
@@ -75,6 +74,7 @@ public partial class MainWindow : Window
     private readonly IExecuteSqlUseCase _executeSql;
     private readonly IGetSqlSchemaUseCase _getSqlSchema;
     private readonly IWorkspaceMaintenanceService _workspaceMaintenance;
+    private readonly ICsvStagingService _csvStagingService;
     private readonly SqlCompletionService _sqlCompletionService = new();
 
     private CsvImport? _selectedImport;
@@ -160,6 +160,7 @@ public partial class MainWindow : Window
         _executeSql = executeSql;
         _getSqlSchema = getSqlSchema;
         _workspaceMaintenance = workspaceMaintenance;
+        _csvStagingService = csvStagingService;
 
         InitializeComponent();
         DataContext = _viewModel;
@@ -423,21 +424,48 @@ public partial class MainWindow : Window
         try
         {
             IReadOnlyList<ZipCsvExtractor.ExtractedCsvFile> files = await ZipCsvExtractor.ExtractAsync(path);
+            HashSet<ZipCsvExtractor.ExtractedCsvFile> unownedFiles = files.ToHashSet();
             try
             {
                 foreach (ZipCsvExtractor.ExtractedCsvFile file in files)
                 {
-                    await ShowImportPreviewAsync(
+                    string entryDisplayName = Path.GetFileNameWithoutExtension(file.EntryName);
+                    ShowStatusMessage($"Przygotowywanie {file.EntryName}…", autoHide: false);
+                    ImportRequest stagingRequest = new(
                         file.FilePath,
-                        sourcePathOverride: path,
-                        displayName: Path.GetFileNameWithoutExtension(file.EntryName),
-                        sourceDisplayName: $"{path}  →  {file.EntryName}",
-                        extractedFile: file);
+                        entryDisplayName,
+                        true,
+                        null,
+                        null,
+                        AutoDetectHeader: true,
+                        SourcePath: path);
+                    CsvStagingResult staging = await Task.Run(
+                        () => _csvStagingService.StageAsync(stagingRequest, CancellationToken.None));
+                    unownedFiles.Remove(file);
+                    try
+                    {
+                        await ShowImportPreviewAsync(
+                            file.FilePath,
+                            sourcePathOverride: path,
+                            displayName: entryDisplayName,
+                            sourceDisplayName: $"{path}  →  {file.EntryName}",
+                            extractedFile: file,
+                            preparedPreview: staging.Preview,
+                            stagingDatabasePath: staging.DatabasePath,
+                            stagingTableName: staging.TableName,
+                            ownedStagingDatabasePath: staging.DatabasePath);
+                    }
+                    catch
+                    {
+                        file.Dispose();
+                        DeleteStagingDatabase(staging.DatabasePath);
+                        throw;
+                    }
                 }
             }
             finally
             {
-                foreach (ZipCsvExtractor.ExtractedCsvFile file in files) file.Dispose();
+                foreach (ZipCsvExtractor.ExtractedCsvFile file in unownedFiles) file.Dispose();
             }
         }
         catch (Exception ex) when (ex is InvalidDataException or IOException or UnauthorizedAccessException)
@@ -452,7 +480,11 @@ public partial class MainWindow : Window
         string? sourcePathOverride = null,
         string? displayName = null,
         string? sourceDisplayName = null,
-        ZipCsvExtractor.ExtractedCsvFile? extractedFile = null)
+        ZipCsvExtractor.ExtractedCsvFile? extractedFile = null,
+        CsvPreview? preparedPreview = null,
+        string? stagingDatabasePath = null,
+        string? stagingTableName = null,
+        string? ownedStagingDatabasePath = null)
     {
         string sourcePath = candidate?.SourcePath ?? sourcePathOverride ?? filePath;
         string folder = Path.GetDirectoryName(sourcePath) ?? string.Empty;
@@ -462,10 +494,10 @@ public partial class MainWindow : Window
             _importCsv,
             candidate?.StagedPath ?? filePath,
             sourcePath,
-            candidate?.Preview,
+            candidate?.Preview ?? preparedPreview,
             alreadyWatched,
-            candidate?.StagingDatabasePath,
-            candidate?.StagingTableName,
+            candidate?.StagingDatabasePath ?? stagingDatabasePath,
+            candidate?.StagingTableName ?? stagingTableName,
             displayName,
             sourceDisplayName,
             extractedFile is null)
@@ -493,10 +525,18 @@ public partial class MainWindow : Window
                 SelectImport(provisionalImport.Id);
                 ExpandFilesPanelToFit(provisionalImport.DisplayName);
             }
-            _ = TrackBackgroundImportAsync(importTask, importRegistered, candidate, previewWindow.WatchFolderRequested, extractedFile);
+            _ = TrackBackgroundImportAsync(
+                importTask,
+                importRegistered,
+                candidate,
+                previewWindow.WatchFolderRequested,
+                extractedFile,
+                ownedStagingDatabasePath);
             extractedFile = null;
+            ownedStagingDatabasePath = null;
         }
         extractedFile?.Dispose();
+        if (ownedStagingDatabasePath is not null) DeleteStagingDatabase(ownedStagingDatabasePath);
     }
 
     private void ShowImportProgress(ImportProgress progress)
@@ -515,7 +555,8 @@ public partial class MainWindow : Window
         bool importRegistered,
         CsvImportCandidate? candidate = null,
         bool watchFolder = false,
-        ZipCsvExtractor.ExtractedCsvFile? extractedFile = null)
+        ZipCsvExtractor.ExtractedCsvFile? extractedFile = null,
+        string? ownedStagingDatabasePath = null)
     {
         try
         {
@@ -550,6 +591,7 @@ public partial class MainWindow : Window
         {
             _databaseMaintenanceRequired = true;
             extractedFile?.Dispose();
+            if (ownedStagingDatabasePath is not null) DeleteStagingDatabase(ownedStagingDatabasePath);
             if (importRegistered)
             {
                 _activeImportCount = Math.Max(0, _activeImportCount - 1);
@@ -653,6 +695,25 @@ public partial class MainWindow : Window
         else if (WorkspaceModeTabControl.SelectedItem == JoinTab && IsJoinConfigurationReady())
         {
             await JoinTablesAsync();
+        }
+    }
+
+    private static void DeleteStagingDatabase(string databasePath)
+    {
+        try
+        {
+            SqliteConnection.ClearAllPools();
+            File.Delete(databasePath);
+            File.Delete(databasePath + "-wal");
+            File.Delete(databasePath + "-shm");
+        }
+        catch (IOException ex)
+        {
+            Log.Warning(ex, "Could not remove ZIP staging database {StagingDatabasePath}", databasePath);
+        }
+        catch (UnauthorizedAccessException ex)
+        {
+            Log.Warning(ex, "Could not remove ZIP staging database {StagingDatabasePath}", databasePath);
         }
     }
 
@@ -1360,23 +1421,36 @@ public partial class MainWindow : Window
 
     private async void DeleteImport_Click(object sender, RoutedEventArgs e)
     {
-        if (_selectedImport is null)
+        CsvImport[] selectedImports = ImportsListBox.SelectedItems
+            .OfType<CsvImport>()
+            .DistinctBy(importItem => importItem.Id)
+            .ToArray();
+        if (selectedImports.Length == 0 && _selectedImport is not null)
+        {
+            selectedImports = [_selectedImport];
+        }
+        if (selectedImports.Length == 0)
         {
             return;
         }
 
+        string selectionDescription = selectedImports.Length == 1
+            ? $"plik '{selectedImports[0].DisplayName}'"
+            : $"{selectedImports.Length} zaznaczonych tabel";
         MessageBoxResult confirmation = MessageBox.Show(this,
-            $"Usunąć plik '{_selectedImport.DisplayName}' z workspace?",
+            $"Usunąć {selectionDescription} z workspace?\n\nTej operacji nie można cofnąć.",
             "CSVForge", MessageBoxButton.YesNo, MessageBoxImage.Warning);
         if (confirmation != MessageBoxResult.Yes)
         {
             return;
         }
 
-        Guid importId = _selectedImport.Id;
+        Guid[] importIds = selectedImports.Select(importItem => importItem.Id).ToArray();
         await RunUiActionAsync(async cancellationToken =>
         {
-            BusyWindow busyWindow = new("Usuwanie tabeli i kompaktowanie workspace…")
+            BusyWindow busyWindow = new(importIds.Length == 1
+                ? "Usuwanie tabeli i kompaktowanie workspace…"
+                : $"Usuwanie {importIds.Length} tabel…")
             {
                 Owner = this
             };
@@ -1386,7 +1460,11 @@ public partial class MainWindow : Window
                 busyWindow.Show();
                 IsEnabled = false;
                 await Dispatcher.InvokeAsync(() => { }, DispatcherPriority.ContextIdle);
-                await Task.Run(() => _deleteImport.ExecuteAsync(importId, cancellationToken), cancellationToken);
+                foreach (Guid importId in importIds)
+                {
+                    cancellationToken.ThrowIfCancellationRequested();
+                    await Task.Run(() => _deleteImport.ExecuteAsync(importId, cancellationToken), cancellationToken);
+                }
             }
             finally
             {
@@ -1399,7 +1477,7 @@ public partial class MainWindow : Window
             _adHocTableName = null;
             DataGrid.ItemsSource = null;
             await RefreshImportsAsync();
-        }, "Plik usunięty");
+        }, importIds.Length == 1 ? "Plik usunięty" : $"Usunięto {importIds.Length} tabel");
     }
 
     private async void RenameImport_Click(object sender, RoutedEventArgs e)
@@ -1440,7 +1518,11 @@ public partial class MainWindow : Window
                 e.Handled = true;
                 return;
             }
-            item.IsSelected = true;
+            if (!item.IsSelected)
+            {
+                listBox.UnselectAll();
+                item.IsSelected = true;
+            }
             return;
         }
 
@@ -2659,11 +2741,6 @@ public partial class MainWindow : Window
             _ = OptimizeWorkspaceNowAsync();
             e.Handled = true;
         }
-        else if (modifiers == ModifierKeys.Control && e.Key == Key.K)
-        {
-            ShowCommandPalette();
-            e.Handled = true;
-        }
         else if (e.Key == Key.F1 && modifiers == ModifierKeys.None)
         {
             ShowShortcuts();
@@ -2699,15 +2776,7 @@ public partial class MainWindow : Window
     private bool CanExportCurrentResult() =>
         _selectedImport is not null || _adHocTableName is not null || !string.IsNullOrWhiteSpace(_sqlResultQuery);
 
-    private void ShowCommandPalette_Click(object sender, RoutedEventArgs e) => ShowCommandPalette();
-
     private void ShowShortcuts_Click(object sender, RoutedEventArgs e) => ShowShortcuts();
-
-    private void ShowCommandPalette()
-    {
-        CommandPaletteWindow palette = new(CreatePaletteCommands()) { Owner = this };
-        palette.ShowDialog();
-    }
 
     private void ShowShortcuts()
     {
@@ -2715,40 +2784,6 @@ public partial class MainWindow : Window
         shortcuts.ShowDialog();
     }
 
-    private IReadOnlyList<PaletteCommand> CreatePaletteCommands() =>
-    [
-        new("Dodaj plik CSV", "Plik", "Ctrl+O", true, () => ChooseCsv_Click(this, new RoutedEventArgs())),
-        new("Utwórz nowy workspace", "Workspace", "Ctrl+N", true, () => _ = CreateNewWorkspaceAsync()),
-        new("Optymalizuj workspace", "Workspace", "Ctrl+Shift+O", _currentWorkspacePath is not null && !_maintenanceRunning,
-            () => _ = OptimizeWorkspaceNowAsync()),
-        new("Obserwowane foldery", "Plik", null, true, () => ConfigureWatchedFolders_Click(this, new RoutedEventArgs())),
-        new("Odśwież dane", "Dane", "Ctrl+R", _selectedImport is not null, () => RefreshTable_Click(this, new RoutedEventArgs())),
-        new("Eksportuj bieżący wynik", "Dane", "Ctrl+E", CanExportCurrentResult(), () => ExportTable_Click(this, new RoutedEventArgs())),
-        new("Przejdź do: Przeglądaj", "Widok", "Ctrl+1", true, () => WorkspaceModeTabControl.SelectedIndex = 0),
-        new("Przejdź do: Duplikaty", "Widok", "Ctrl+2", true, () => WorkspaceModeTabControl.SelectedIndex = 1),
-        new("Przejdź do: Porównaj", "Widok", "Ctrl+3", true, () => WorkspaceModeTabControl.SelectedIndex = 2),
-        new("Przejdź do: Połącz", "Widok", "Ctrl+4", true, () => WorkspaceModeTabControl.SelectedIndex = 3),
-        new("Przejdź do: SQL", "Widok", "Ctrl+5", true, () => WorkspaceModeTabControl.SelectedIndex = 4),
-        new(_filesPanelMode == FilesPanelMode.Collapsed ? "Rozwiń panel plików" : "Zwiń panel plików", "Widok", null, true,
-            () => SetFilesPanelMode(_filesPanelMode == FilesPanelMode.Collapsed ? FilesPanelMode.Expanded : FilesPanelMode.Collapsed)),
-        new("Otwórz folder logów", "Pomoc", null, true, () => OpenLogs_Click(this, new RoutedEventArgs())),
-        new("Ustawienia", "Aplikacja", null, true, () => ShowSettings_Click(this, new RoutedEventArgs())),
-        new("Pokaż wszystkie skróty", "Pomoc", "F1", true, ShowShortcuts),
-        new("O programie", "Pomoc", null, true, () => ShowAbout_Click(this, new RoutedEventArgs()))
-    ];
-
-    private void OpenLogs_Click(object sender, RoutedEventArgs e)
-    {
-        Directory.CreateDirectory(AppPaths.LogsDirectory);
-        Process.Start(new ProcessStartInfo(AppPaths.LogsDirectory) { UseShellExecute = true });
-    }
-
-    private void ShowAbout_Click(object sender, RoutedEventArgs e)
-    {
-        MessageBox.Show(this,
-            "CSVForge\n\nAutor:\nBorys Patyk\nborys.patyk@gmail.com",
-            "O programie CSVForge", MessageBoxButton.OK, MessageBoxImage.Information);
-    }
 
     private void ShowSettings_Click(object sender, RoutedEventArgs e)
     {

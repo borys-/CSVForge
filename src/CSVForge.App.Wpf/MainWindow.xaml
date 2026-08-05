@@ -46,11 +46,12 @@
                         </DataTemplate>
                     </ComboBox.ItemTemplate>
                 </ComboBox>
-                <Button Grid.Column="3" Content="Polecenia  Ctrl+K" Style="{StaticResource ToolbarButton}" Margin="0,0,8,0" Click="ShowCommandPalette_Click" />
-                <Button Grid.Column="4" Content="Skróty" Style="{StaticResource ToolbarButton}" Margin="0,0,8,0" Click="ShowShortcuts_Click" />
-                <Button Grid.Column="5" Content="Logi" Style="{StaticResource ToolbarButton}" Margin="0,0,8,0" Click="OpenLogs_Click" />
-                <Button Grid.Column="6" Content="Ustawienia" Style="{StaticResource ToolbarButton}" Margin="0,0,8,0" Click="ShowSettings_Click" />
-                <Button Grid.Column="7" Content="O programie" Style="{StaticResource ToolbarButton}" Click="ShowAbout_Click" />
+                <Button Grid.Column="3" Style="{StaticResource ToolbarButton}"
+                        Width="38" Height="34" Padding="0"
+                        ToolTip="Ustawienia" AutomationProperties.Name="Ustawienia"
+                        Click="ShowSettings_Click">
+                    <TextBlock FontFamily="Segoe Fluent Icons" FontSize="17" Text="&#xE713;" />
+                </Button>
             </Grid>
         </Border>
 
@@ -119,6 +120,7 @@
                         </Expander>
 
                         <ListBox x:Name="ImportsListBox" SelectionChanged="ImportsListBox_SelectionChanged"
+                                 SelectionMode="Extended"
                                  HorizontalContentAlignment="Stretch" PreviewMouseRightButtonDown="ListBox_PreviewMouseRightButtonDown"
                                  PreviewKeyDown="DeletableListBox_PreviewKeyDown"
                                  AllowDrop="True" DragEnter="FilesDropArea_DragEnter" DragOver="FilesDropArea_DragOver"
@@ -128,7 +130,7 @@
                                     <MenuItem Header="Zmień nazwę" Click="RenameImport_Click" />
                                     <MenuItem Header="Eksportuj" Click="ExportTable_Click" />
                                     <Separator />
-                                    <MenuItem Header="Usuń" Click="DeleteImport_Click" />
+                                    <MenuItem Header="Usuń zaznaczone" Click="DeleteImport_Click" />
                                 </ContextMenu>
                             </ListBox.ContextMenu>
                             <ListBox.Resources>

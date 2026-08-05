@@ -7,7 +7,6 @@ public partial class ShortcutsWindow : Window
 {
     public IReadOnlyList<ShortcutItem> Shortcuts { get; } =
     [
-        new("Ctrl+K", "Otwórz paletę poleceń", "Globalne"),
         new("F1", "Pokaż wszystkie skróty", "Globalne"),
         new("Ctrl+N", "Utwórz nowy workspace", "Workspace"),
         new("Ctrl+Shift+O", "Optymalizuj workspace", "Workspace"),
@@ -22,7 +21,7 @@ public partial class ShortcutsWindow : Window
         new("Ctrl+Enter", "Wykonaj zapytanie", "Edytor SQL"),
         new("Ctrl+Space", "Otwórz podpowiedzi", "Edytor SQL"),
         new("Ctrl+C", "Kopiuj zaznaczone komórki", "Tabela"),
-        new("Esc", "Zamknij paletę lub okno skrótów", "Okna")
+        new("Esc", "Zamknij okno skrótów", "Okna")
     ];
 
     public ShortcutsWindow()

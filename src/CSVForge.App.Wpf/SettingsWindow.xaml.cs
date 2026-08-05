@@ -1,5 +1,7 @@
 using System.Windows;
 using System.Windows.Controls;
+using System.Diagnostics;
+using System.IO;
 using CSVForge.Application.Export;
 
 namespace CSVForge.App.Wpf;
@@ -36,5 +38,24 @@ public partial class SettingsWindow : Window
             ExportNameTemplateTextBox.Text = ExportNameTemplate.Default;
         }
         DialogResult = true;
+    }
+
+    private void ShowShortcuts_Click(object sender, RoutedEventArgs e)
+    {
+        ShortcutsWindow shortcuts = new() { Owner = this };
+        shortcuts.ShowDialog();
+    }
+
+    private void OpenLogs_Click(object sender, RoutedEventArgs e)
+    {
+        Directory.CreateDirectory(AppPaths.LogsDirectory);
+        Process.Start(new ProcessStartInfo(AppPaths.LogsDirectory) { UseShellExecute = true });
+    }
+
+    private void ShowAbout_Click(object sender, RoutedEventArgs e)
+    {
+        MessageBox.Show(this,
+            "CSVForge\n\nAutor:\nBorys Patyk\nborys.patyk@gmail.com",
+            "O programie CSVForge", MessageBoxButton.OK, MessageBoxImage.Information);
     }
 }

@@ -83,10 +83,10 @@ internal sealed class CsvFolderWatchCoordinator : IDisposable
 
     private async Task StageAsync(CsvImportCandidate candidate, string normalizedPath, CancellationToken cancellationToken)
     {
-        await _stagingSlots.WaitAsync(cancellationToken);
+        await _stagingSlots.WaitAsync(cancellationToken).ConfigureAwait(false);
         try
         {
-            await WaitUntilStableAsync(candidate.SourcePath, cancellationToken);
+            await WaitUntilStableAsync(candidate.SourcePath, cancellationToken).ConfigureAwait(false);
             if (string.Equals(Path.GetExtension(candidate.SourcePath), ".zip", StringComparison.OrdinalIgnoreCase))
             {
                 candidate.State = CsvCandidateState.Ready;
@@ -105,7 +105,7 @@ internal sealed class CsvFolderWatchCoordinator : IDisposable
             if (candidate.StagedPath is not null) TryDelete(candidate.StagedPath);
             candidate.StagedPath = stagedPath;
             CSVForge.Domain.Imports.ImportRequest request = new(stagedPath, candidate.DisplayName, true, null, null, AutoDetectHeader: true, SourcePath: candidate.SourcePath);
-            CsvStagingResult staging = await _stagingService.StageAsync(request, cancellationToken);
+            CsvStagingResult staging = await _stagingService.StageAsync(request, cancellationToken).ConfigureAwait(false);
             candidate.StagingDatabasePath = staging.DatabasePath;
             candidate.StagingTableName = staging.TableName;
             candidate.Preview = staging.Preview;
@@ -138,7 +138,7 @@ internal sealed class CsvFolderWatchCoordinator : IDisposable
                 }
                 previousLength = info.Length; previousWrite = info.LastWriteTimeUtc;
             }
-            await Task.Delay(500, cancellationToken);
+            await Task.Delay(500, cancellationToken).ConfigureAwait(false);
         }
         throw new IOException("Plik nie jest jeszcze gotowy do odczytu.");
     }

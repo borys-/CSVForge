@@ -14,6 +14,12 @@ internal sealed class SqliteSqlExecutor(IWorkspaceContext workspaceContext) : IS
             throw new InvalidOperationException("Otwórz lub utwórz workspace przed wykonaniem SQL.");
         }
 
+        SqlSafetyAssessment assessment = SqlSafetyPolicy.Assess(sql);
+        if (assessment.Risk == SqlRiskLevel.Forbidden)
+        {
+            throw new InvalidOperationException(assessment.UserMessage);
+        }
+
         await using SqliteConnection connection = SqliteConnectionFactory.Create(workspaceContext.CurrentWorkspacePath);
         await connection.OpenAsync(cancellationToken);
         await using SqliteCommand command = connection.CreateCommand();

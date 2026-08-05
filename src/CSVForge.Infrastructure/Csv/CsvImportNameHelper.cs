@@ -1,4 +1,5 @@
 using System.Text;
+using CSVForge.Infrastructure.Sqlite;
 
 namespace CSVForge.Infrastructure.Csv;
 
@@ -56,7 +57,7 @@ internal static class CsvImportNameHelper
 
     public static string QuoteIdentifier(string value)
     {
-        return "\"" + value.Replace("\"", "\"\"") + "\"";
+        return SqliteIdentifier.Quote(value);
     }
 
     private static string NormalizeIdentifier(string value, string fallback, int maxLength)

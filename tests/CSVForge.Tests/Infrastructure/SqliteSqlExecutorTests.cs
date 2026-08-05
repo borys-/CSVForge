@@ -60,6 +60,17 @@ public sealed class SqliteSqlExecutorTests
         Assert.False(result.WasTruncated);
     }
 
+    [Theory]
+    [InlineData("ATTACH DATABASE 'other.db' AS other;")]
+    [InlineData("SELECT load_extension('unsafe');")]
+    [InlineData("PRAGMA journal_mode = DELETE;")]
+    public async Task ExecuteSqlUseCase_RejectsForbiddenWorkspaceEscapes(string sql)
+    {
+        ServiceProvider provider = await CreateProviderAsync();
+        await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            provider.GetRequiredService<IExecuteSqlUseCase>().ExecuteAsync(sql));
+    }
+
     private static async Task<ServiceProvider> CreateProviderAsync()
     {
         string workspacePath = Path.Combine(

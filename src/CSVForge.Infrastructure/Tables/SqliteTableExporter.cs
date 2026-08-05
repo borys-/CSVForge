@@ -78,7 +78,7 @@ internal sealed class SqliteTableExporter(IWorkspaceContext workspaceContext) : 
 
         if (request.IncludeHeader)
         {
-            string header = string.Join(delimiter, Enumerable.Range(0, reader.FieldCount).Select(index => Escape(reader.GetName(index), request.Delimiter)));
+            string header = string.Join(delimiter, Enumerable.Range(0, reader.FieldCount).Select(index => Escape(reader.GetName(index), request.Delimiter, false)));
             await writer.WriteLineAsync(header.AsMemory(), cancellationToken);
         }
 
@@ -88,7 +88,8 @@ internal sealed class SqliteTableExporter(IWorkspaceContext workspaceContext) : 
             string row = string.Join(delimiter, Enumerable.Range(0, reader.FieldCount)
                 .Select(index => Escape(
                     reader.IsDBNull(index) ? string.Empty : Convert.ToString(reader.GetValue(index), CultureInfo.InvariantCulture) ?? string.Empty,
-                    request.Delimiter)));
+                    request.Delimiter,
+                    request.ProtectExcelFormulas)));
             await writer.WriteLineAsync(row.AsMemory(), cancellationToken);
             exportedRows++;
         }
@@ -113,8 +114,12 @@ internal sealed class SqliteTableExporter(IWorkspaceContext workspaceContext) : 
         return columns;
     }
 
-    private static string Escape(string value, char delimiter)
+    private static string Escape(string value, char delimiter, bool protectExcelFormulas)
     {
+        if (protectExcelFormulas && value.Length > 0 && value[0] is '=' or '+' or '-' or '@')
+        {
+            value = "'" + value;
+        }
         if (!value.Contains(delimiter) && !value.Contains('"') && !value.Contains('\r') && !value.Contains('\n'))
         {
             return value;

@@ -100,7 +100,8 @@ public partial class ImportPreviewWindow : Window
         }
         catch (Exception ex)
         {
-            MessageBox.Show(this, ex.Message, "CSVForge", MessageBoxButton.OK, MessageBoxImage.Error);
+            Serilog.Log.Error(ex, "Could not load import preview for {CsvPath}", _filePath);
+            MessageBox.Show(this, UserErrorMessages.From(ex), "CSVForge", MessageBoxButton.OK, MessageBoxImage.Error);
             PreviewStatusText.Text = "Nie udało się wczytać pliku";
         }
         finally
@@ -146,9 +147,10 @@ public partial class ImportPreviewWindow : Window
         }
         catch (Exception ex)
         {
+            Serilog.Log.Error(ex, "Could not import previewed file {CsvPath}", _filePath);
             if (IsVisible)
             {
-                MessageBox.Show(this, ex.Message, "CSVForge", MessageBoxButton.OK, MessageBoxImage.Error);
+                MessageBox.Show(this, UserErrorMessages.From(ex), "CSVForge", MessageBoxButton.OK, MessageBoxImage.Error);
             }
         }
         finally

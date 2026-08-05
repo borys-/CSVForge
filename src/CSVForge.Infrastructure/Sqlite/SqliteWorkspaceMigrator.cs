@@ -61,6 +61,8 @@ internal static class SqliteWorkspaceMigrator
             "source_sql",
             "ALTER TABLE _workspace_operations ADD COLUMN source_sql TEXT;",
             cancellationToken);
+
+        await RemoveInterruptedImportsAsync(connection, cancellationToken);
     }
 
     private static async Task EnsureColumnAsync(
@@ -71,7 +73,7 @@ internal static class SqliteWorkspaceMigrator
         CancellationToken cancellationToken)
     {
         await using SqliteCommand inspect = connection.CreateCommand();
-        inspect.CommandText = $"PRAGMA table_info(\"{tableName}\");";
+        inspect.CommandText = $"PRAGMA table_info({SqliteIdentifier.Quote(tableName)});";
         await using SqliteDataReader reader = await inspect.ExecuteReaderAsync(cancellationToken);
         while (await reader.ReadAsync(cancellationToken))
         {
@@ -85,5 +87,27 @@ internal static class SqliteWorkspaceMigrator
         await using SqliteCommand alter = connection.CreateCommand();
         alter.CommandText = alterSql;
         await alter.ExecuteNonQueryAsync(cancellationToken);
+    }
+
+    private static async Task RemoveInterruptedImportsAsync(SqliteConnection connection, CancellationToken cancellationToken)
+    {
+        await using SqliteCommand find = connection.CreateCommand();
+        find.CommandText = """
+            SELECT name FROM sqlite_master
+            WHERE type = 'table' AND name LIKE 'import_%'
+              AND name NOT IN (SELECT table_name FROM _workspace_imports);
+            """;
+        List<string> orphanedTables = [];
+        await using (SqliteDataReader reader = await find.ExecuteReaderAsync(cancellationToken))
+        {
+            while (await reader.ReadAsync(cancellationToken)) orphanedTables.Add(reader.GetString(0));
+        }
+
+        foreach (string tableName in orphanedTables)
+        {
+            await using SqliteCommand drop = connection.CreateCommand();
+            drop.CommandText = $"DROP TABLE {SqliteIdentifier.Quote(tableName)};";
+            await drop.ExecuteNonQueryAsync(cancellationToken);
+        }
     }
 }

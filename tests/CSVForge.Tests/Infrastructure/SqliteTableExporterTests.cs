@@ -141,4 +141,26 @@ public sealed class SqliteTableExporterTests
         Assert.DoesNotContain("Ola", content);
     }
 
+    [Fact]
+    public async Task ExportTableUseCase_ProtectsExcelFormulaCellsByDefault()
+    {
+        string directory = Path.Combine(Path.GetTempPath(), "CSVForge.Tests", Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(directory);
+        string workspacePath = Path.Combine(directory, "workspace.db");
+        string inputPath = Path.Combine(directory, "input.csv");
+        string outputPath = Path.Combine(directory, "output.csv");
+        await File.WriteAllTextAsync(inputPath, "Value\r\n=2+2\r\n@SUM(A1:A2)\r\n");
+        ServiceProvider provider = new ServiceCollection().AddApplication().AddInfrastructure().BuildServiceProvider();
+        await provider.GetRequiredService<ICreateWorkspaceUseCase>().ExecuteAsync(workspacePath);
+        ImportResult import = await provider.GetRequiredService<IImportCsvUseCase>()
+            .ExecuteAsync(new ImportRequest(inputPath, "Input", true, null, null));
+
+        await provider.GetRequiredService<IExportTableUseCase>()
+            .ExecuteAsync(new ExportTableRequest(import.Import.TableName, outputPath, ';', true));
+
+        string content = await File.ReadAllTextAsync(outputPath);
+        Assert.Contains("'=2+2", content);
+        Assert.Contains("'@SUM(A1:A2)", content);
+    }
+
 }

@@ -38,6 +38,7 @@ internal sealed class SqliteWorkspaceMaintenanceService : IWorkspaceMaintenanceS
         cancellationToken.ThrowIfCancellationRequested();
         try
         {
+            await VerifyIntegrityAsync(fullOptimizedPath, cancellationToken);
             await using (SqliteConnection connection = SqliteConnectionFactory.Create(fullPath))
             {
                 await connection.OpenAsync(cancellationToken);
@@ -48,18 +49,17 @@ internal sealed class SqliteWorkspaceMaintenanceService : IWorkspaceMaintenanceS
 
             cancellationToken.ThrowIfCancellationRequested();
             SqliteConnection.ClearAllPools();
-            string backupPath = fullPath + $".pre-optimize-{Guid.NewGuid():N}.bak";
+            string backupPath = fullPath + ".pre-optimize.bak";
             try
             {
+                if (File.Exists(backupPath)) File.Delete(backupPath);
                 File.Replace(fullOptimizedPath, fullPath, backupPath, ignoreMetadataErrors: true);
-                TryDelete(backupPath);
                 TryDelete(fullPath + "-wal");
                 TryDelete(fullPath + "-shm");
                 return true;
             }
             catch (IOException)
             {
-                TryDelete(backupPath);
                 return false;
             }
         }
@@ -102,6 +102,18 @@ internal sealed class SqliteWorkspaceMaintenanceService : IWorkspaceMaintenanceS
         await ExecuteAsync(connection, "ANALYZE;", cancellationToken);
         await ExecuteAsync(connection, "PRAGMA optimize;", cancellationToken);
 
+        await VerifyIntegrityAsync(connection, cancellationToken);
+    }
+
+    private static async Task VerifyIntegrityAsync(string path, CancellationToken cancellationToken)
+    {
+        await using SqliteConnection connection = SqliteConnectionFactory.Create(path);
+        await connection.OpenAsync(cancellationToken);
+        await VerifyIntegrityAsync(connection, cancellationToken);
+    }
+
+    private static async Task VerifyIntegrityAsync(SqliteConnection connection, CancellationToken cancellationToken)
+    {
         await using SqliteCommand integrity = connection.CreateCommand();
         integrity.CommandText = "PRAGMA integrity_check;";
         string? result = (string?)await integrity.ExecuteScalarAsync(cancellationToken);
@@ -118,12 +130,20 @@ internal sealed class SqliteWorkspaceMaintenanceService : IWorkspaceMaintenanceS
         await command.ExecuteNonQueryAsync(cancellationToken);
     }
 
-    private static void TryDelete(string path)
+    private static bool TryDelete(string path)
     {
         try
         {
             if (File.Exists(path)) File.Delete(path);
+            return true;
         }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { }
+        catch (IOException)
+        {
+            return false;
+        }
+        catch (UnauthorizedAccessException)
+        {
+            return false;
+        }
     }
 }

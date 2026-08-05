@@ -1,3 +1,4 @@
+using CSVForge.Application;
 using CSVForge.Application.Ports;
 using CSVForge.Domain.Workspaces;
 using CSVForge.Infrastructure;
@@ -8,6 +9,40 @@ namespace CSVForge.Tests.Infrastructure;
 
 public sealed class SqliteWorkspaceServiceTests
 {
+    [Fact]
+    public async Task OpenAsync_IsIdempotentAndRecoversOrphanedImportTable()
+    {
+        string workspacePath = Path.Combine(Path.GetTempPath(), "CSVForge.Tests", Guid.NewGuid().ToString("N"), "recovery.db");
+        ServiceProvider provider = new ServiceCollection().AddApplication().AddInfrastructure().BuildServiceProvider();
+        IWorkspaceService service = provider.GetRequiredService<IWorkspaceService>();
+        await service.CreateAsync(workspacePath, CancellationToken.None);
+        await using (SqliteConnection connection = new($"Data Source={workspacePath}"))
+        {
+            await connection.OpenAsync();
+            await using SqliteCommand command = connection.CreateCommand();
+            command.CommandText = "CREATE TABLE import_interrupted (value TEXT);";
+            await command.ExecuteNonQueryAsync();
+        }
+
+        await service.OpenAsync(workspacePath, CancellationToken.None);
+        await service.OpenAsync(workspacePath, CancellationToken.None);
+
+        Assert.DoesNotContain("import_interrupted", await ReadTablesAsync(workspacePath, CancellationToken.None));
+    }
+
+    [Fact]
+    public async Task CreateAsync_UsesWalAndForeignKeysPolicy()
+    {
+        string workspacePath = Path.Combine(Path.GetTempPath(), "CSVForge.Tests", Guid.NewGuid().ToString("N"), "wal.db");
+        ServiceProvider provider = new ServiceCollection().AddApplication().AddInfrastructure().BuildServiceProvider();
+        await provider.GetRequiredService<IWorkspaceService>().CreateAsync(workspacePath, CancellationToken.None);
+        await using SqliteConnection connection = new($"Data Source={workspacePath}");
+        await connection.OpenAsync();
+        await using SqliteCommand journal = connection.CreateCommand();
+        journal.CommandText = "PRAGMA journal_mode;";
+        Assert.Equal("wal", ((string?)await journal.ExecuteScalarAsync())?.ToLowerInvariant());
+    }
+
     [Fact]
     public async Task CreateAsync_CreatesWorkspaceFileAndMetadataTables()
     {

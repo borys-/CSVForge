@@ -11,6 +11,27 @@ namespace CSVForge.Tests.Infrastructure;
 public sealed class SqliteWorkspaceMaintenanceTests
 {
     [Fact]
+    public async Task Replace_RejectsCorruptedOptimizedCopyAndPreservesWorkspace()
+    {
+        string directory = Path.Combine(Path.GetTempPath(), "CSVForge.Tests", Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(directory);
+        string workspacePath = Path.Combine(directory, "workspace.db");
+        ServiceProvider provider = new ServiceCollection().AddApplication().AddInfrastructure().BuildServiceProvider();
+        await provider.GetRequiredService<ICreateWorkspaceUseCase>().ExecuteAsync(workspacePath);
+        string corruptPath = Path.Combine(directory, "corrupt.tmp");
+        await File.WriteAllTextAsync(corruptPath, "not a sqlite database");
+
+        Assert.False(await provider.GetRequiredService<IWorkspaceMaintenanceService>()
+            .TryReplaceWithOptimizedCopyAsync(workspacePath, corruptPath, CancellationToken.None));
+
+        await using SqliteConnection connection = new($"Data Source={workspacePath}");
+        await connection.OpenAsync();
+        await using SqliteCommand integrity = connection.CreateCommand();
+        integrity.CommandText = "PRAGMA integrity_check;";
+        Assert.Equal("ok", (string?)await integrity.ExecuteScalarAsync());
+    }
+
+    [Fact]
     public async Task OptimizedCopy_RemainsSeparateUntilItAtomicallyReplacesWorkspace()
     {
         string directory = Path.Combine(Path.GetTempPath(), "CSVForge.Tests", Guid.NewGuid().ToString("N"));
@@ -35,6 +56,7 @@ public sealed class SqliteWorkspaceMaintenanceTests
 
             Assert.True(await maintenance.TryReplaceWithOptimizedCopyAsync(workspacePath, optimizedPath, CancellationToken.None));
             Assert.False(File.Exists(optimizedPath));
+            Assert.True(File.Exists(workspacePath + ".pre-optimize.bak"));
 
             await using SqliteConnection connection = new($"Data Source={workspacePath}");
             await connection.OpenAsync();

@@ -183,7 +183,6 @@ internal sealed class CsvImporterService(IWorkspaceContext workspaceContext) : I
             count,
             originalHeaders.Select((header, index) => new CsvColumn(header, columnNames[index], index)).ToArray());
 
-        bool metadataSaved = false;
         SqliteTransaction? transaction = null;
         try
         {
@@ -211,26 +210,11 @@ internal sealed class CsvImporterService(IWorkspaceContext workspaceContext) : I
                 rowCount++;
                 if (rowCount % request.BatchSize == 0)
                 {
-                    await transaction.CommitAsync(cancellationToken);
-                    await transaction.DisposeAsync();
-                    transaction = null;
-
-                    if (!metadataSaved)
-                    {
-                        await SaveMetadataAsync(connection, CreateImport(rowCount), cancellationToken);
-                        metadataSaved = true;
-                    }
-                    else
-                    {
-                        await UpdateImportRowCountAsync(connection, importId, rowCount, cancellationToken);
-                    }
-
                     int percentRemaining = stream.Length == 0
                         ? 0
                         : Math.Clamp((int)Math.Ceiling(100d * (stream.Length - stream.Position) / stream.Length), 0, 100);
-                    progress?.Report(new ImportProgress(rowCount, null, "Batch committed", percentRemaining));
+                    progress?.Report(new ImportProgress(rowCount, null, "Import in progress", percentRemaining));
                     cancellationToken.ThrowIfCancellationRequested();
-                    transaction = (SqliteTransaction)await connection.BeginTransactionAsync(cancellationToken);
                 }
             }
 
@@ -239,14 +223,7 @@ internal sealed class CsvImporterService(IWorkspaceContext workspaceContext) : I
             transaction = null;
 
             CsvImport import = CreateImport(rowCount);
-            if (!metadataSaved)
-            {
-                await SaveMetadataAsync(connection, import, cancellationToken);
-            }
-            else
-            {
-                await UpdateImportRowCountAsync(connection, importId, rowCount, cancellationToken);
-            }
+            await SaveMetadataAsync(connection, import, cancellationToken);
 
             await SaveErrorsAsync(connection, import.Id, errors, cancellationToken);
             progress?.Report(new ImportProgress(rowCount, rowCount, "Import completed", 0));

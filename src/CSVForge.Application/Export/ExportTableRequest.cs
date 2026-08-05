@@ -7,4 +7,5 @@ public sealed record ExportTableRequest(
     bool IncludeHeader,
     IReadOnlyList<string>? Columns = null,
     string? SourceSql = null,
-    IReadOnlyDictionary<string, IReadOnlyList<string?>>? ColumnFilters = null);
+    IReadOnlyDictionary<string, IReadOnlyList<string?>>? ColumnFilters = null,
+    bool ProtectExcelFormulas = true);

@@ -113,7 +113,12 @@ internal sealed class CsvFolderWatchCoordinator : IDisposable
             candidate.Error = null;
         }
         catch (OperationCanceledException) { }
-        catch (Exception ex) { candidate.Error = ex.Message; candidate.State = CsvCandidateState.Error; }
+        catch (Exception ex)
+        {
+            Serilog.Log.Error(ex, "Could not stage watched CSV file {CsvPath}", candidate.SourcePath);
+            candidate.Error = UserErrorMessages.From(ex);
+            candidate.State = CsvCandidateState.Error;
+        }
         finally { _staging.TryRemove(normalizedPath, out _); _candidateChanged(candidate); _stagingSlots.Release(); }
     }
 

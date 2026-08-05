@@ -66,7 +66,14 @@ public static class ZipCsvExtractor
         {
             if (Directory.Exists(directory)) Directory.Delete(directory, recursive: true);
         }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { }
+        catch (IOException)
+        {
+            // Best-effort cleanup; the next application startup retries orphan removal.
+        }
+        catch (UnauthorizedAccessException)
+        {
+            // Best-effort cleanup; the next application startup retries orphan removal.
+        }
     }
 
     public sealed class ExtractedCsvFile(string entryName, string filePath) : IDisposable

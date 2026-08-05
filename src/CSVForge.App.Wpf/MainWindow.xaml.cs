@@ -15,6 +15,7 @@ using CSVForge.Application.Ports;
 using CSVForge.Domain.Imports;
 using CSVForge.Domain.Operations;
 using CSVForge.Infrastructure.Csv;
+using CSVForge.App.Wpf.ViewModels;
 using Microsoft.Win32;
 using System.Windows;
 using System.Windows.Controls;
@@ -34,6 +35,7 @@ namespace CSVForge.App.Wpf;
 
 public partial class MainWindow : Window
 {
+    private readonly MainWindowViewModel _viewModel = new();
     private const int PageSize = 200;
     private const string RowNumberColumnKey = "__csvforge_row_number";
     private static readonly Brush ComparisonAllFilesBrush = CreateFrozenBrush("#DCFCE7");
@@ -159,6 +161,7 @@ public partial class MainWindow : Window
         _workspaceMaintenance = workspaceMaintenance;
 
         InitializeComponent();
+        DataContext = _viewModel;
         AddHandler(Mouse.PreviewMouseDownEvent, new MouseButtonEventHandler(UserActivity_PreviewMouseDown), true);
         AddHandler(Mouse.PreviewMouseWheelEvent, new MouseWheelEventHandler(UserActivity_PreviewMouseWheel), true);
         AddHandler(Keyboard.PreviewKeyDownEvent, new KeyEventHandler(MainWindow_PreviewKeyDown), true);
@@ -172,6 +175,7 @@ public partial class MainWindow : Window
         {
             _idleMaintenanceTimer.Stop();
             _maintenanceCancellation?.Cancel();
+            _viewModel.Operation.Dispose();
             _folderWatchCoordinator.Dispose();
         };
         LoadFilesPanelPreferences();
@@ -255,6 +259,7 @@ public partial class MainWindow : Window
 
         WorkspaceStatusText.Text = fullPath;
         _currentWorkspacePath = fullPath;
+        _viewModel.Workspace.CurrentPath = fullPath;
         _databaseMaintenanceRequired = true;
         SaveRecentWorkspace(fullPath);
         await RefreshImportsAsync();
@@ -2176,6 +2181,20 @@ public partial class MainWindow : Window
 
     private async Task ExecuteSqlAsync()
     {
+        SqlSafetyAssessment assessment = SqlSafetyPolicy.Assess(SqlQueryTextBox.Text);
+        if (assessment.Risk == SqlRiskLevel.Forbidden)
+        {
+            ShowValidationMessage(assessment.UserMessage);
+            return;
+        }
+        if (assessment.Risk == SqlRiskLevel.RequiresConfirmation
+            && MessageBox.Show(this, $"{assessment.UserMessage}\n\nCzy na pewno wykonać to polecenie?",
+                "Potwierdź operację SQL wysokiego ryzyka", MessageBoxButton.YesNo,
+                MessageBoxImage.Warning, MessageBoxResult.No) != MessageBoxResult.Yes)
+        {
+            return;
+        }
+
         await RunUiActionAsync(async cancellationToken =>
         {
             SqlQueryResult result = await _executeSql.ExecuteAsync(SqlQueryTextBox.Text, cancellationToken);
@@ -2383,6 +2402,7 @@ public partial class MainWindow : Window
         }
         catch (Exception ex)
         {
+            Log.Error(ex, "UI operation failed");
             ShowStatusMessage("Błąd", autoHide: false);
             MessageBox.Show(this, PolishErrorMessage(ex), "CSVForge", MessageBoxButton.OK, MessageBoxImage.Error);
         }
@@ -2707,9 +2727,9 @@ public partial class MainWindow : Window
             UnauthorizedAccessException => "Brak uprawnień do pliku lub katalogu.",
             SqliteException { SqliteErrorCode: 5 or 6 } => "Workspace jest używany przez inną operację. Spróbuj ponownie za chwilę.",
             IOException => "Nie udało się odczytać lub zapisać pliku. Sprawdź dostępne miejsce i czy plik nie jest zablokowany.",
-            ArgumentException => $"Nieprawidłowe dane: {exception.Message}",
-            InvalidOperationException => exception.Message,
-            _ => $"Wystąpił nieoczekiwany błąd: {exception.Message}"
+            ArgumentException => "Wprowadzono nieprawidłowe dane. Sprawdź wartości i spróbuj ponownie.",
+            InvalidOperationException => "Operacja nie może zostać wykonana w bieżącym stanie aplikacji.",
+            _ => "Wystąpił nieoczekiwany błąd. Szczegóły zapisano w logu."
         };
     }
 

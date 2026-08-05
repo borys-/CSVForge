@@ -160,7 +160,7 @@ public sealed class CsvImporterServiceTests
     }
 
     [Fact]
-    public async Task ImportCsvUseCase_FirstCommittedBatchIsVisibleBeforeImportCompletes()
+    public async Task ImportCsvUseCase_DoesNotExposePartialBatchBeforeImportCompletes()
     {
         string directory = Path.Combine(Path.GetTempPath(), "CSVForge.Tests", Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(directory);
@@ -169,10 +169,10 @@ public sealed class CsvImporterServiceTests
         await File.WriteAllTextAsync(csvPath, "Id\r\n1\r\n2\r\n3\r\n4\r\n5\r\n");
         ServiceProvider provider = new ServiceCollection().AddApplication().AddInfrastructure().BuildServiceProvider();
         await provider.GetRequiredService<ICreateWorkspaceUseCase>().ExecuteAsync(workspacePath);
-        bool firstBatchWasVisible = false;
+        bool partialBatchWasVisible = false;
         InlineProgress progress = new(value =>
         {
-            if (value.CurrentStep != "Batch committed" || firstBatchWasVisible)
+            if (value.CurrentStep != "Import in progress" || partialBatchWasVisible)
             {
                 return;
             }
@@ -186,13 +186,13 @@ public sealed class CsvImporterServiceTests
                 JOIN sqlite_master AS tables ON tables.name = imports.table_name
                 WHERE imports.row_count = 2;
                 """;
-            firstBatchWasVisible = (long)(command.ExecuteScalar() ?? 0L) == 1;
+            partialBatchWasVisible = (long)(command.ExecuteScalar() ?? 0L) == 1;
         });
 
         await provider.GetRequiredService<IImportCsvUseCase>()
             .ExecuteAsync(new ImportRequest(csvPath, "Data", true, null, null, 2), progress);
 
-        Assert.True(firstBatchWasVisible);
+        Assert.False(partialBatchWasVisible);
     }
 
     [Fact]

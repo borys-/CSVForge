@@ -2,11 +2,11 @@ using System.Collections.ObjectModel;
 using System.ComponentModel;
 using System.Globalization;
 using System.IO;
+using System.Runtime.InteropServices;
 using System.Text.Json;
 using System.Xml;
 using CSVForge.Application.Abstractions;
 using CSVForge.Application.Export;
-using CSVForge.Application.Operations;
 using CSVForge.Application.Csv;
 using CSVForge.Application.Tables;
 using CSVForge.Application.Sql;
@@ -18,6 +18,7 @@ using CSVForge.App.Wpf.ViewModels;
 using Microsoft.Win32;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Controls.Primitives;
 using System.Windows.Data;
 using System.Windows.Input;
 using System.Windows.Media;
@@ -39,6 +40,8 @@ public partial class MainWindow : Window
     private const string RowNumberColumnKey = "__csvforge_row_number";
     private static readonly Brush ComparisonAllFilesBrush = CreateFrozenBrush("#DCFCE7");
     private static readonly Brush ComparisonSingleFileBrush = CreateFrozenBrush("#FEE2E2");
+    private static readonly Brush WholeColumnBrush = CreateFrozenBrush("#DBEAFE");
+    private static readonly Brush WholeColumnBorderBrush = CreateFrozenBrush("#60A5FA");
     private static readonly Brush[] ComparisonCombinationBrushes =
     [
         CreateFrozenBrush("#DBEAFE"),
@@ -67,10 +70,8 @@ public partial class MainWindow : Window
     private readonly IJoinDatasetsUseCase _joinDatasets;
     private readonly IExportTableUseCase _exportTable;
     private readonly ICreateTableFromResultUseCase _createTableFromResult;
-    private readonly IListOperationsUseCase _listOperations;
     private readonly IDeleteImportUseCase _deleteImport;
     private readonly IRenameImportUseCase _renameImport;
-    private readonly IDeleteOperationUseCase _deleteOperation;
     private readonly IExecuteSqlUseCase _executeSql;
     private readonly IGetSqlSchemaUseCase _getSqlSchema;
     private readonly IWorkspaceMaintenanceService _workspaceMaintenance;
@@ -93,6 +94,7 @@ public partial class MainWindow : Window
     private bool _updatingComparisonFiles;
     private bool _handlingDroppedFiles;
     private string _exportNameTemplate = ExportNameTemplate.Default;
+    private bool _showPreparedImports;
     private FilesPanelMode _filesPanelMode = FilesPanelMode.Expanded;
     private double _expandedFilesPanelWidth = 300;
     private int _activeImportCount;
@@ -106,9 +108,6 @@ public partial class MainWindow : Window
     private string? _sqlResultQuery;
     private bool _sqlResultPagingEnabled;
     private string _sqlResultTitle = "Wynik operacji";
-    private string? _lastDuplicatesSql;
-    private string? _lastCompareSql;
-    private string? _lastJoinSql;
     private bool _suppressModeChange;
     private readonly List<AdditionalCompareFileRow> _additionalCompareFiles = [];
     private readonly ObservableCollection<CsvImportCandidate> _importCandidates = [];
@@ -117,6 +116,8 @@ public partial class MainWindow : Window
     private List<WatchedFolderSetting> _watchedFolders = [];
     private CsvFolderWatchCoordinator? _folderWatchCoordinator;
     private readonly Dictionary<string, IReadOnlyList<string?>> _columnFilters = new(StringComparer.OrdinalIgnoreCase);
+    private readonly HashSet<string> _selectedWholeColumns = new(StringComparer.OrdinalIgnoreCase);
+    private string? _wholeColumnSelectionContext;
     private string? _columnFilterTableName;
 
     public MainWindow(
@@ -133,10 +134,8 @@ public partial class MainWindow : Window
         IJoinDatasetsUseCase joinDatasets,
         IExportTableUseCase exportTable,
         ICreateTableFromResultUseCase createTableFromResult,
-        IListOperationsUseCase listOperations,
         IDeleteImportUseCase deleteImport,
         IRenameImportUseCase renameImport,
-        IDeleteOperationUseCase deleteOperation,
         IExecuteSqlUseCase executeSql,
         IGetSqlSchemaUseCase getSqlSchema,
         IWorkspaceMaintenanceService workspaceMaintenance)
@@ -153,10 +152,8 @@ public partial class MainWindow : Window
         _joinDatasets = joinDatasets;
         _exportTable = exportTable;
         _createTableFromResult = createTableFromResult;
-        _listOperations = listOperations;
         _deleteImport = deleteImport;
         _renameImport = renameImport;
-        _deleteOperation = deleteOperation;
         _executeSql = executeSql;
         _getSqlSchema = getSqlSchema;
         _workspaceMaintenance = workspaceMaintenance;
@@ -266,7 +263,6 @@ public partial class MainWindow : Window
         SaveRecentWorkspace(fullPath);
         await RefreshImportsAsync();
         ConfigureFolderWatchers();
-        await RefreshOperationsAsync();
         await RefreshSqlSchemaAsync();
     }
 
@@ -647,6 +643,33 @@ public partial class MainWindow : Window
         DuplicateColumnComboBox.SelectedIndex = DuplicateColumnComboBox.Items.Count > 0 ? 0 : -1;
         JoinLeftKeyColumnsComboBox.ItemsSource = _selectedImport?.Columns.Select(column => column.Name).ToArray();
         JoinLeftKeyColumnsComboBox.SelectedIndex = JoinLeftKeyColumnsComboBox.Items.Count > 0 ? 0 : -1;
+        CsvImport? previousRight = JoinTableComboBox.SelectedItem as CsvImport;
+        bool wasUpdatingImports = _updatingImports;
+        _updatingImports = true;
+        try
+        {
+            JoinLeftTableComboBox.ItemsSource = _imports;
+            JoinLeftTableComboBox.SelectedItem = _selectedImport is null
+                ? null
+                : _imports.FirstOrDefault(import => import.Id == _selectedImport.Id);
+            CsvImport[] availableRightImports = _imports
+                .Where(import => _selectedImport is null || import.Id != _selectedImport.Id)
+                .ToArray();
+            JoinTableComboBox.ItemsSource = availableRightImports;
+            JoinTableComboBox.SelectedItem = previousRight is not null
+                ? availableRightImports.FirstOrDefault(import => import.Id == previousRight.Id) ?? availableRightImports.FirstOrDefault()
+                : availableRightImports.FirstOrDefault();
+        }
+        finally
+        {
+            _updatingImports = wasUpdatingImports;
+        }
+        JoinTableComboBox_SelectionChanged(
+            this,
+            new SelectionChangedEventArgs(
+                Selector.SelectionChangedEvent,
+                Array.Empty<object>(),
+                Array.Empty<object>()));
         UpdateComparisonFiles();
         LeftOutputColumnsTextBox.Text = _selectedImport is null ? string.Empty : string.Join(",", _selectedImport.Columns.Select(column => column.Name));
         BrowseFileNameText.Text = _selectedImport?.DisplayName ?? "Brak tabel";
@@ -770,7 +793,10 @@ public partial class MainWindow : Window
         try
         {
             _fileItems.Clear();
-            foreach (CsvImportCandidate candidate in _importCandidates) _fileItems.Add(candidate);
+            if (_showPreparedImports)
+            {
+                foreach (CsvImportCandidate candidate in _importCandidates) _fileItems.Add(candidate);
+            }
             foreach (CsvImport import in _imports) _fileItems.Add(import);
             if (selectedId is { } id)
             {
@@ -781,15 +807,6 @@ public partial class MainWindow : Window
         {
             _updatingImports = wasUpdating;
         }
-    }
-
-    private void ConfigureWatchedFolders_Click(object sender, RoutedEventArgs e)
-    {
-        WatchedFoldersWindow dialog = new(_watchedFolders) { Owner = this };
-        if (dialog.ShowDialog() != true) return;
-        _watchedFolders = dialog.Folders.Select(item => new WatchedFolderSetting(item.Path, item.IsEnabled)).ToList();
-        SaveWatchedFolders();
-        ConfigureFolderWatchers();
     }
 
     private void ConfigureFolderWatchers()
@@ -877,11 +894,57 @@ public partial class MainWindow : Window
         await RefreshSelectedTableAsync();
     }
 
-    private void DataGrid_PreviewKeyDown(object sender, KeyEventArgs e)
+    private async void DataGrid_PreviewKeyDown(object sender, KeyEventArgs e)
     {
         if (e.Key == Key.C && Keyboard.Modifiers == ModifierKeys.Control)
         {
-            e.Handled = CopyCurrentCellValue();
+            e.Handled = true;
+            await CopySelectionAsync();
+        }
+    }
+
+    private async Task CopyWholeColumnsAsync()
+    {
+        string? sourceSql = _sqlResultQuery;
+        string? tableName = sourceSql is null ? _adHocTableName ?? _selectedImport?.TableName : null;
+        string[] columns = DataGrid.Columns
+            .Select(column => column.SortMemberPath)
+            .Where(column => !string.IsNullOrWhiteSpace(column)
+                && _selectedWholeColumns.Contains(column))
+            .ToArray();
+        if ((tableName is null && sourceSql is null) || columns.Length == 0)
+        {
+            return;
+        }
+
+        string temporaryPath = Path.Combine(Path.GetTempPath(), "CSVForge", "clipboard", $"{Guid.NewGuid():N}.csv");
+        Directory.CreateDirectory(Path.GetDirectoryName(temporaryPath)!);
+        try
+        {
+            await RunUiActionAsync(async cancellationToken =>
+            {
+                await _exportTable.ExecuteAsync(new ExportTableRequest(
+                    tableName ?? string.Empty,
+                    temporaryPath,
+                    ';',
+                    true,
+                    columns,
+                    sourceSql,
+                    _columnFilters), cancellationToken);
+                string clipboardText = await File.ReadAllTextAsync(temporaryPath, cancellationToken);
+                await SetClipboardTextWithRetryAsync(clipboardText, cancellationToken);
+            }, $"Skopiowano całe kolumny: {columns.Length}");
+        }
+        finally
+        {
+            try
+            {
+                File.Delete(temporaryPath);
+            }
+            catch (IOException ex)
+            {
+                Log.Warning(ex, "Could not remove temporary clipboard export {TemporaryPath}", temporaryPath);
+            }
         }
     }
 
@@ -903,12 +966,45 @@ public partial class MainWindow : Window
         }
     }
 
-    private void CopySelectedCell_Click(object sender, RoutedEventArgs e)
+    private async void CopySelectedCell_Click(object sender, RoutedEventArgs e)
     {
-        CopyCurrentCellValue();
+        // A ContextMenu lives in a separate window. Let it close before touching
+        // the clipboard; otherwise clipboard errors can escape this async event.
+        if (DataGrid.ContextMenu is { IsOpen: true } contextMenu)
+        {
+            contextMenu.IsOpen = false;
+            await Dispatcher.Yield(DispatcherPriority.Background);
+        }
+
+        try
+        {
+            await CopySelectionAsync();
+        }
+        catch (Exception ex)
+        {
+            Log.Error(ex, "Copying from the data grid context menu failed");
+            ShowStatusMessage("Nie udało się skopiować zaznaczenia");
+            MessageBox.Show(
+                this,
+                "Nie udało się skopiować zaznaczenia. Spróbuj ponownie.",
+                "Kopiowanie nie powiodło się",
+                MessageBoxButton.OK,
+                MessageBoxImage.Warning);
+        }
     }
 
-    private bool CopyCurrentCellValue()
+    private async Task CopySelectionAsync()
+    {
+        if (_selectedWholeColumns.Count > 0)
+        {
+            await CopyWholeColumnsAsync();
+            return;
+        }
+
+        await CopyCurrentCellValueAsync();
+    }
+
+    private async Task<bool> CopyCurrentCellValueAsync()
     {
         List<DataGridCellInfo> selectedCells = DataGrid.SelectedCells
             .Where(cell => cell.IsValid)
@@ -971,7 +1067,9 @@ public partial class MainWindow : Window
 
         try
         {
-            Clipboard.SetText(string.Join(Environment.NewLine, clipboardRows));
+            await SetClipboardTextWithRetryAsync(
+                string.Join(Environment.NewLine, clipboardRows),
+                CancellationToken.None);
             ShowStatusMessage(cells.Length == 1
                 ? "Skopiowano wartość komórki"
                 : $"Skopiowano komórki: {cells.Length:N0}");
@@ -1114,9 +1212,7 @@ public partial class MainWindow : Window
                 SelectedEnum(DuplicateModeComboBox, DuplicateSearchMode.AllDuplicateRows),
                 IgnoreEmptyKeysCheckBox.IsChecked == true));
 
-            _lastDuplicatesSql = result.Sql;
             await ShowOperationResultAsync(result, "Wynik duplikatów");
-            await RefreshOperationsAsync();
         }, "Duplikaty gotowe");
     }
 
@@ -1171,11 +1267,9 @@ public partial class MainWindow : Window
                 sources,
                 SelectedEnum(CompareModeComboBox, DatasetCompareMode.AllWithStatus)));
 
-            _lastCompareSql = result.Sql;
             _sortColumn = leftKeys[0];
             _sortDescending = false;
             await ShowOperationResultAsync(result, "Wynik porównania");
-            await RefreshOperationsAsync();
         }, "Porównanie gotowe");
     }
 
@@ -1219,9 +1313,7 @@ public partial class MainWindow : Window
                 ParseColumns(RightOutputColumnsTextBox.Text),
                 SelectedEnum(JoinTypeComboBox, DatasetJoinType.Left)));
 
-            _lastJoinSql = result.Sql;
             await ShowOperationResultAsync(result, "Wynik połączenia");
-            await RefreshOperationsAsync();
         }, "Połączenie gotowe");
     }
 
@@ -1253,7 +1345,7 @@ public partial class MainWindow : Window
         DateTimeOffset exportTimestamp = DateTimeOffset.Now;
         string suggestedFileName = ExportNameTemplate.ForFile(_exportNameTemplate, recordCount, exportTimestamp);
         string suggestedTableName = ExportNameTemplate.ForTable(_exportNameTemplate, recordCount, exportTimestamp);
-        ExportResultWindow options = new(columns, suggestedTableName) { Owner = this };
+        ExportResultWindow options = new(columns, suggestedTableName, _selectedWholeColumns) { Owner = this };
         if (options.ShowDialog() != true)
         {
             return;
@@ -1326,7 +1418,6 @@ public partial class MainWindow : Window
             RebuildFileItems();
             ImportsListBox.SelectedItem = selectedImport;
             _selectedImport = selectedImport;
-            JoinTableComboBox.ItemsSource = imports;
         }
         finally
         {
@@ -1345,78 +1436,6 @@ public partial class MainWindow : Window
             _sortDescending = false;
             await RefreshSelectedTableAsync();
         }
-    }
-
-    private async Task RefreshOperationsAsync()
-    {
-        IReadOnlyList<WorkspaceOperation> operations = await _listOperations.ExecuteAsync();
-        OperationsListBox.ItemsSource = operations;
-        _lastDuplicatesSql = LatestOperationSql(operations, "duplicates");
-        _lastCompareSql = LatestOperationSql(operations, "compare");
-        _lastJoinSql = LatestOperationSql(operations, "join");
-    }
-
-    private static string? LatestOperationSql(
-        IEnumerable<WorkspaceOperation> operations,
-        string operationType) =>
-        operations.FirstOrDefault(operation =>
-            string.Equals(operation.OperationType, operationType, StringComparison.OrdinalIgnoreCase)
-            && !string.IsNullOrWhiteSpace(operation.SourceSql))?.SourceSql;
-
-    private async void OperationsListBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
-    {
-        if (OperationsListBox.SelectedItem is not WorkspaceOperation operation)
-        {
-            return;
-        }
-
-        if (!string.IsNullOrWhiteSpace(operation.SourceSql))
-        {
-            OperationResult result = OperationResult.OkQuery(operation.SourceSql, operation.Message);
-            await RunUiActionAsync(
-                () => ShowOperationResultAsync(result, "Wynik operacji"),
-                "Wynik operacji gotowy");
-            return;
-        }
-        if (operation.ResultTableName is null)
-        {
-            return;
-        }
-
-        _adHocTableName = operation.ResultTableName;
-        _sqlResultQuery = null;
-        _sqlResultPagingEnabled = false;
-        _pageOffset = 0;
-        await RefreshSelectedTableAsync();
-    }
-
-    private async void DeleteOperation_Click(object sender, RoutedEventArgs e)
-    {
-        if (OperationsListBox.SelectedItem is not WorkspaceOperation operation)
-        {
-            return;
-        }
-        if (MessageBox.Show(this, "Usunąć wynik tej operacji?", "CSVForge", MessageBoxButton.YesNo, MessageBoxImage.Warning) != MessageBoxResult.Yes)
-        {
-            return;
-        }
-
-        await RunUiActionAsync(async cancellationToken =>
-        {
-            await _deleteOperation.ExecuteAsync(operation.Id, cancellationToken);
-            if (string.Equals(_adHocTableName, operation.ResultTableName, StringComparison.OrdinalIgnoreCase))
-            {
-                _adHocTableName = null;
-                DataGrid.ItemsSource = null;
-            }
-            if (string.Equals(_sqlResultQuery, operation.SourceSql, StringComparison.Ordinal))
-            {
-                _sqlResultQuery = null;
-                _sqlResultPagingEnabled = false;
-                DataGrid.ItemsSource = null;
-            }
-            await RefreshOperationsAsync();
-        }, "Wynik usunięty");
     }
 
     private async void DeleteImport_Click(object sender, RoutedEventArgs e)
@@ -1616,6 +1635,7 @@ public partial class MainWindow : Window
                 _exportNameTemplate = string.IsNullOrWhiteSpace(preferences.ExportNameTemplate)
                     ? ExportNameTemplate.Default
                     : preferences.ExportNameTemplate;
+                _showPreparedImports = preferences.ShowPreparedImports;
             }
         }
         catch (Exception ex) when (ex is JsonException or IOException or UnauthorizedAccessException)
@@ -1629,7 +1649,11 @@ public partial class MainWindow : Window
         try
         {
             Directory.CreateDirectory(AppPaths.DataDirectory);
-            UiPreferences preferences = new(_filesPanelMode.ToString(), _expandedFilesPanelWidth, _exportNameTemplate);
+            UiPreferences preferences = new(
+                _filesPanelMode.ToString(),
+                _expandedFilesPanelWidth,
+                _exportNameTemplate,
+                _showPreparedImports);
             File.WriteAllText(UiPreferencesPath, JsonSerializer.Serialize(preferences));
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
@@ -1905,6 +1929,13 @@ public partial class MainWindow : Window
         bool allowSorting = true,
         long rowNumberOffset = 0)
     {
+        string selectionContext = $"{_selectedImport?.Id}|{_adHocTableName}|{_sqlResultQuery}";
+        if (!string.Equals(_wholeColumnSelectionContext, selectionContext, StringComparison.Ordinal))
+        {
+            _selectedWholeColumns.Clear();
+            _wholeColumnSelectionContext = selectionContext;
+        }
+
         DataGrid.ItemsSource = null;
         DataGrid.Columns.Clear();
         DataGrid.CanUserSortColumns = allowSorting;
@@ -1923,8 +1954,18 @@ public partial class MainWindow : Window
         foreach (string column in columns)
         {
             Grid header = new();
+                header.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
                 header.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
                 header.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+                CheckBox selectColumn = new()
+                {
+                    IsChecked = _selectedWholeColumns.Contains(column),
+                    ToolTip = "Zaznacz całą kolumnę; Ctrl+C skopiuje wszystkie rekordy",
+                    VerticalAlignment = VerticalAlignment.Center,
+                    Margin = new Thickness(0, 0, 6, 0)
+                };
+                selectColumn.Checked += (_, _) => SetWholeColumnSelected(column, true);
+                selectColumn.Unchecked += (_, _) => SetWholeColumnSelected(column, false);
                 TextBlock label = new() { Text = column, VerticalAlignment = VerticalAlignment.Center, TextTrimming = TextTrimming.CharacterEllipsis };
                 bool filterActive = _columnFilters.ContainsKey(column);
                 Button filterButton = new()
@@ -1937,10 +1978,12 @@ public partial class MainWindow : Window
                     Foreground = filterActive ? Brushes.DodgerBlue : Brushes.SlateGray
                 };
                 filterButton.Click += async (_, _) => await ShowColumnFilterAsync(column);
-                Grid.SetColumn(filterButton, 1);
+                Grid.SetColumn(label, 1);
+                Grid.SetColumn(filterButton, 2);
+                header.Children.Add(selectColumn);
                 header.Children.Add(label);
                 header.Children.Add(filterButton);
-            DataGrid.Columns.Add(new DataGridTextColumn
+            DataGridTextColumn dataColumn = new()
             {
                 Header = header,
                 SortMemberPath = column,
@@ -1953,7 +1996,9 @@ public partial class MainWindow : Window
                 Width = DataGridLength.Auto,
                 MinWidth = 72,
                 MaxWidth = 400
-            });
+            };
+            DataGrid.Columns.Add(dataColumn);
+            ApplyWholeColumnSelectionVisual(dataColumn, _selectedWholeColumns.Contains(column));
         }
 
         Dictionary<string, string?>[] numberedRows = rows.ToArray();
@@ -1965,6 +2010,59 @@ public partial class MainWindow : Window
         DataGrid.ItemsSource = numberedRows;
     }
 
+    private static async Task SetClipboardTextWithRetryAsync(
+        string text,
+        CancellationToken cancellationToken)
+    {
+        const int clipboardCannotOpen = unchecked((int)0x800401D0);
+        const int maximumAttempts = 6;
+
+        for (int attempt = 1; ; attempt++)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            try
+            {
+                Clipboard.SetText(text);
+                return;
+            }
+            catch (COMException ex) when (
+                ex.HResult == clipboardCannotOpen
+                && attempt < maximumAttempts)
+            {
+                await Task.Delay(TimeSpan.FromMilliseconds(50 * attempt), cancellationToken);
+            }
+        }
+    }
+
+    private void SetWholeColumnSelected(string columnName, bool selected)
+    {
+        if (selected) _selectedWholeColumns.Add(columnName);
+        else _selectedWholeColumns.Remove(columnName);
+        DataGridColumn? column = DataGrid.Columns.FirstOrDefault(item =>
+            string.Equals(item.SortMemberPath, columnName, StringComparison.OrdinalIgnoreCase));
+        if (column is not null) ApplyWholeColumnSelectionVisual(column, selected);
+    }
+
+    private static void ApplyWholeColumnSelectionVisual(DataGridColumn column, bool selected)
+    {
+        if (column.Header is Grid header)
+        {
+            header.Background = selected ? WholeColumnBrush : Brushes.Transparent;
+        }
+
+        if (!selected)
+        {
+            column.CellStyle = null;
+            return;
+        }
+
+        Style style = new(typeof(DataGridCell));
+        style.Setters.Add(new Setter(Control.BackgroundProperty, WholeColumnBrush));
+        style.Setters.Add(new Setter(Control.BorderBrushProperty, WholeColumnBorderBrush));
+        style.Setters.Add(new Setter(Control.BorderThicknessProperty, new Thickness(1, 0, 1, 0)));
+        column.CellStyle = style;
+    }
+
     private void DeletableListBox_PreviewKeyDown(object sender, KeyEventArgs e)
     {
         if (e.Key != Key.Delete || Keyboard.Modifiers != ModifierKeys.None)
@@ -1972,13 +2070,7 @@ public partial class MainWindow : Window
             return;
         }
 
-        if (ReferenceEquals(sender, OperationsListBox)
-            && OperationsListBox.SelectedItem is WorkspaceOperation)
-        {
-            e.Handled = true;
-            DeleteOperation_Click(sender, new RoutedEventArgs());
-        }
-        else if (ReferenceEquals(sender, ImportsListBox)
+        if (ReferenceEquals(sender, ImportsListBox)
             && ImportsListBox.SelectedItem is CsvImport)
         {
             e.Handled = true;
@@ -2338,7 +2430,6 @@ public partial class MainWindow : Window
             }
 
             await RefreshImportsAsync();
-            await RefreshOperationsAsync();
             await RefreshSqlSchemaAsync();
         }, "SQL wykonany");
     }
@@ -2447,19 +2538,43 @@ public partial class MainWindow : Window
 
     private void JoinTableComboBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
     {
+        if (_updatingImports) return;
         if (JoinTableComboBox.SelectedItem is not CsvImport import)
         {
             JoinRightKeyColumnsTextBox.Text = string.Empty;
             RightOutputColumnsTextBox.Text = string.Empty;
+            UpdateJoinExplanation();
             return;
         }
 
         string[] columns = import.Columns.Select(column => column.Name).ToArray();
-        RightOutputColumnsTextBox.Text = string.Join(",", columns);
         IReadOnlyList<string> leftKeys = ParseColumns(JoinLeftKeyColumnsComboBox.Text);
-        JoinRightKeyColumnsTextBox.Text = leftKeys.All(key => columns.Contains(key, StringComparer.OrdinalIgnoreCase))
+        string suggestedRightKeys = leftKeys.All(key => columns.Contains(key, StringComparer.OrdinalIgnoreCase))
             ? string.Join(",", leftKeys)
             : columns.FirstOrDefault() ?? string.Empty;
+        JoinRightKeyColumnsTextBox.Text = suggestedRightKeys;
+        HashSet<string> rightKeys = ParseColumns(suggestedRightKeys).ToHashSet(StringComparer.OrdinalIgnoreCase);
+        RightOutputColumnsTextBox.Text = string.Join(",", columns.Where(column => !rightKeys.Contains(column)));
+        UpdateJoinExplanation();
+    }
+
+    private void JoinTypeComboBox_SelectionChanged(object sender, SelectionChangedEventArgs e) => UpdateJoinExplanation();
+
+    private void UpdateJoinExplanation()
+    {
+        if (JoinExplanationText is null) return;
+        string left = _selectedImport?.DisplayName ?? "lewy plik";
+        string right = (JoinTableComboBox?.SelectedItem as CsvImport)?.DisplayName ?? "prawy plik";
+        JoinExplanationText.Text = SelectedEnum(JoinTypeComboBox, DatasetJoinType.Left) switch
+        {
+            DatasetJoinType.Left =>
+                $"Zostaną zachowane wszystkie wiersze z „{left}”, a pasujące dane zostaną dołączone z „{right}”. Gdy nie będzie dopasowania, dane prawego pliku pozostaną puste.",
+            DatasetJoinType.Inner =>
+                $"Wynik będzie zawierał tylko wiersze mające dopasowanie jednocześnie w „{left}” i „{right}”. Wiersze bez pary zostaną pominięte.",
+            DatasetJoinType.Right =>
+                $"Zostaną zachowane wszystkie wiersze z „{right}”, a pasujące dane zostaną dołączone z „{left}”. Gdy nie będzie dopasowania, dane lewego pliku pozostaną puste.",
+            _ => string.Empty
+        };
     }
 
     private void JoinLeftKeyColumnsComboBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
@@ -2467,6 +2582,44 @@ public partial class MainWindow : Window
         if (JoinTableComboBox.SelectedItem is CsvImport)
         {
             JoinTableComboBox_SelectionChanged(sender, e);
+        }
+    }
+
+    private void SelectLeftOutputColumns_Click(object sender, RoutedEventArgs e)
+    {
+        if (_selectedImport is null)
+        {
+            ShowValidationMessage("Najpierw wybierz lewy plik.");
+            return;
+        }
+
+        SelectJoinOutputColumns(
+            $"Kolumny lewe — {_selectedImport.DisplayName}",
+            _selectedImport.Columns.Select(column => column.Name),
+            LeftOutputColumnsTextBox);
+    }
+
+    private void SelectRightOutputColumns_Click(object sender, RoutedEventArgs e)
+    {
+        if (JoinTableComboBox.SelectedItem is not CsvImport rightImport)
+        {
+            ShowValidationMessage("Najpierw wybierz prawy plik.");
+            return;
+        }
+
+        SelectJoinOutputColumns(
+            $"Kolumny prawe — {rightImport.DisplayName}",
+            rightImport.Columns.Select(column => column.Name),
+            RightOutputColumnsTextBox);
+    }
+
+    private void SelectJoinOutputColumns(string title, IEnumerable<string> availableColumns, TextBox target)
+    {
+        string[] available = availableColumns.ToArray();
+        ColumnSelectionWindow dialog = new(title, available, ParseColumns(target.Text)) { Owner = this };
+        if (dialog.ShowDialog() == true)
+        {
+            target.Text = string.Join(",", dialog.SelectedColumns);
         }
     }
 
@@ -2587,6 +2740,27 @@ public partial class MainWindow : Window
     private void CancelOperation_Click(object sender, RoutedEventArgs e)
     {
         _operationCancellation?.Cancel();
+    }
+
+    private void JoinLeftTableComboBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (_updatingImports || JoinLeftTableComboBox.SelectedItem is not CsvImport import)
+        {
+            return;
+        }
+
+        _selectedImport = import;
+        _updatingImports = true;
+        try
+        {
+            ImportsListBox.SelectedItem = _imports.FirstOrDefault(item => item.Id == import.Id);
+        }
+        finally
+        {
+            _updatingImports = false;
+        }
+        UpdateSelectedImportControls();
+        UpdateJoinExplanation();
     }
 
     private void UserActivity_PreviewMouseDown(object sender, MouseButtonEventArgs e) => RecordUserActivity();
@@ -2787,10 +2961,20 @@ public partial class MainWindow : Window
 
     private void ShowSettings_Click(object sender, RoutedEventArgs e)
     {
-        SettingsWindow settings = new(_exportNameTemplate) { Owner = this };
+        SettingsWindow settings = new(
+            _exportNameTemplate,
+            _showPreparedImports,
+            _watchedFolders) { Owner = this };
         if (settings.ShowDialog() != true) return;
         _exportNameTemplate = settings.ExportNameTemplateValue;
+        _showPreparedImports = settings.ShowPreparedImports;
+        _watchedFolders = settings.WatchedFolders
+            .Select(item => new WatchedFolderSetting(item.Path, item.IsEnabled))
+            .ToList();
         SaveFilesPanelPreferences();
+        SaveWatchedFolders();
+        ConfigureFolderWatchers();
+        RebuildFileItems();
         ShowStatusMessage("Ustawienia zapisane");
     }
 
@@ -2891,7 +3075,11 @@ public partial class MainWindow : Window
         Expanded
     }
 
-    private sealed record UiPreferences(string FilesPanelMode, double ExpandedFilesPanelWidth, string? ExportNameTemplate = null);
+    private sealed record UiPreferences(
+        string FilesPanelMode,
+        double ExpandedFilesPanelWidth,
+        string? ExportNameTemplate = null,
+        bool ShowPreparedImports = false);
     private sealed record WatchedFolderPreference(string Path, bool IsEnabled);
 
     private sealed record AdditionalCompareFileRow(

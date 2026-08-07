@@ -9,17 +9,28 @@ namespace CSVForge.App.Wpf;
 public partial class SettingsWindow : Window
 {
     private static readonly DateTimeOffset PreviewTimestamp = new(2026, 8, 5, 14, 7, 0, TimeSpan.Zero);
+    private List<WatchedFolderSetting> _watchedFolders;
 
-    public SettingsWindow(string exportNameTemplate)
+    public SettingsWindow(
+        string exportNameTemplate,
+        bool showPreparedImports,
+        IEnumerable<WatchedFolderSetting> watchedFolders)
     {
+        _watchedFolders = watchedFolders.Select(item => new WatchedFolderSetting(item.Path, item.IsEnabled)).ToList();
         InitializeComponent();
         ExportNameTemplateTextBox.Text = string.IsNullOrWhiteSpace(exportNameTemplate)
             ? ExportNameTemplate.Default
             : exportNameTemplate;
+        ShowPreparedImportsCheckBox.IsChecked = showPreparedImports;
         UpdatePreview();
+        UpdateWatchedFoldersStatus();
     }
 
     public string ExportNameTemplateValue => ExportNameTemplateTextBox.Text.Trim();
+
+    public bool ShowPreparedImports => ShowPreparedImportsCheckBox.IsChecked == true;
+
+    public IReadOnlyList<WatchedFolderSetting> WatchedFolders => _watchedFolders;
 
     private void Template_Changed(object sender, TextChangedEventArgs e) => UpdatePreview();
 
@@ -38,6 +49,23 @@ public partial class SettingsWindow : Window
             ExportNameTemplateTextBox.Text = ExportNameTemplate.Default;
         }
         DialogResult = true;
+    }
+
+    private void ConfigureWatchedFolders_Click(object sender, RoutedEventArgs e)
+    {
+        WatchedFoldersWindow dialog = new(_watchedFolders) { Owner = this };
+        if (dialog.ShowDialog() != true) return;
+        _watchedFolders = dialog.Folders
+            .Select(item => new WatchedFolderSetting(item.Path, item.IsEnabled))
+            .ToList();
+        UpdateWatchedFoldersStatus();
+    }
+
+    private void UpdateWatchedFoldersStatus()
+    {
+        if (WatchedFoldersStatusText is null) return;
+        int enabled = _watchedFolders.Count(folder => folder.IsEnabled);
+        WatchedFoldersStatusText.Text = $"Foldery: {_watchedFolders.Count}, aktywne: {enabled}";
     }
 
     private void ShowShortcuts_Click(object sender, RoutedEventArgs e)

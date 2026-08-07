@@ -34,8 +34,6 @@ internal sealed class SqliteDuplicateFinder(IWorkspaceContext workspaceContext) 
             : BuildRowsSql(request.TableName, keyColumnsSql, emptyFilter);
 
         long duplicateCount = await CountRowsAsync(connection, sql, cancellationToken);
-        await SaveOperationAsync(connection, "duplicates", sql, $"Found {duplicateCount} duplicate result rows.", cancellationToken);
-
         return OperationResult.OkQuery(sql, $"Znaleziono {duplicateCount} wierszy wyniku duplikatów.");
     }
 
@@ -93,18 +91,4 @@ internal sealed class SqliteDuplicateFinder(IWorkspaceContext workspaceContext) 
         return (long)(await command.ExecuteScalarAsync(cancellationToken) ?? 0L);
     }
 
-    private static async Task SaveOperationAsync(SqliteConnection connection, string operationType, string sql, string message, CancellationToken cancellationToken)
-    {
-        await using SqliteCommand command = connection.CreateCommand();
-        command.CommandText = """
-            INSERT INTO _workspace_operations (id, operation_type, result_table_name, created_at, message, source_sql)
-            VALUES ($id, $operationType, NULL, $createdAt, $message, $sourceSql);
-            """;
-        command.Parameters.AddWithValue("$id", Guid.NewGuid().ToString());
-        command.Parameters.AddWithValue("$operationType", operationType);
-        command.Parameters.AddWithValue("$createdAt", DateTimeOffset.UtcNow.ToString("O"));
-        command.Parameters.AddWithValue("$message", message);
-        command.Parameters.AddWithValue("$sourceSql", sql);
-        await command.ExecuteNonQueryAsync(cancellationToken);
-    }
 }

@@ -42,51 +42,14 @@ internal static class SqliteWorkspaceMigrator
                 FOREIGN KEY (import_id) REFERENCES _workspace_imports(id) ON DELETE CASCADE
             );
 
-            CREATE TABLE IF NOT EXISTS _workspace_operations (
-                id TEXT PRIMARY KEY NOT NULL,
-                operation_type TEXT NOT NULL,
-                result_table_name TEXT,
-                created_at TEXT NOT NULL,
-                message TEXT NOT NULL
-            );
+            DROP TABLE IF EXISTS _workspace_operations;
             """;
 
         await using SqliteCommand command = connection.CreateCommand();
         command.CommandText = sql;
         await command.ExecuteNonQueryAsync(cancellationToken);
 
-        await EnsureColumnAsync(
-            connection,
-            "_workspace_operations",
-            "source_sql",
-            "ALTER TABLE _workspace_operations ADD COLUMN source_sql TEXT;",
-            cancellationToken);
-
         await RemoveInterruptedImportsAsync(connection, cancellationToken);
-    }
-
-    private static async Task EnsureColumnAsync(
-        SqliteConnection connection,
-        string tableName,
-        string columnName,
-        string alterSql,
-        CancellationToken cancellationToken)
-    {
-        await using SqliteCommand inspect = connection.CreateCommand();
-        inspect.CommandText = $"PRAGMA table_info({SqliteIdentifier.Quote(tableName)});";
-        await using SqliteDataReader reader = await inspect.ExecuteReaderAsync(cancellationToken);
-        while (await reader.ReadAsync(cancellationToken))
-        {
-            if (string.Equals(reader.GetString(1), columnName, StringComparison.OrdinalIgnoreCase))
-            {
-                return;
-            }
-        }
-
-        await reader.DisposeAsync();
-        await using SqliteCommand alter = connection.CreateCommand();
-        alter.CommandText = alterSql;
-        await alter.ExecuteNonQueryAsync(cancellationToken);
     }
 
     private static async Task RemoveInterruptedImportsAsync(SqliteConnection connection, CancellationToken cancellationToken)

@@ -29,7 +29,6 @@ internal sealed class SqliteDatasetJoiner(IWorkspaceContext workspaceContext) : 
 
         string sql = BuildSql(request);
         long rowCount = await CountRowsAsync(connection, sql, cancellationToken);
-        await SaveOperationAsync(connection, sql, request.JoinType, rowCount, cancellationToken);
         return OperationResult.OkQuery(sql, $"Połączenie zwróciło {rowCount} wierszy.");
     }
 
@@ -102,20 +101,6 @@ internal sealed class SqliteDatasetJoiner(IWorkspaceContext workspaceContext) : 
         await using SqliteCommand command = connection.CreateCommand();
         command.CommandText = $"SELECT COUNT(*) FROM ({NormalizeSql(sql)}) AS _result;";
         return (long)(await command.ExecuteScalarAsync(cancellationToken) ?? 0L);
-    }
-
-    private static async Task SaveOperationAsync(SqliteConnection connection, string sql, DatasetJoinType joinType, long rowCount, CancellationToken cancellationToken)
-    {
-        await using SqliteCommand command = connection.CreateCommand();
-        command.CommandText = """
-            INSERT INTO _workspace_operations (id, operation_type, result_table_name, created_at, message, source_sql)
-            VALUES ($id, 'join', NULL, $createdAt, $message, $sourceSql);
-            """;
-        command.Parameters.AddWithValue("$id", Guid.NewGuid().ToString());
-        command.Parameters.AddWithValue("$createdAt", DateTimeOffset.UtcNow.ToString("O"));
-        command.Parameters.AddWithValue("$message", $"{joinType} join produced {rowCount} rows.");
-        command.Parameters.AddWithValue("$sourceSql", sql);
-        await command.ExecuteNonQueryAsync(cancellationToken);
     }
 
     private static string NormalizeSql(string sql) => sql.Trim().TrimEnd(';');

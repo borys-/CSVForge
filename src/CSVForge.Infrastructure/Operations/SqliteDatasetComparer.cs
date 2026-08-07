@@ -32,7 +32,6 @@ internal sealed class SqliteDatasetComparer(IWorkspaceContext workspaceContext) 
         long rowCount = counts.Values.Sum();
         string details = string.Join(", ", counts.OrderBy(item => item.Key).Select(item => $"{item.Key}: {item.Value}"));
         string message = $"Porównanie {request.Sources.Count} plików zwróciło {rowCount} wierszy ({details}).";
-        await SaveOperationAsync(connection, sql, message, cancellationToken);
         return OperationResult.OkQuery(sql, message);
     }
 
@@ -127,21 +126,4 @@ internal sealed class SqliteDatasetComparer(IWorkspaceContext workspaceContext) 
         return counts;
     }
 
-    private static async Task SaveOperationAsync(
-        SqliteConnection connection,
-        string sql,
-        string message,
-        CancellationToken cancellationToken)
-    {
-        await using SqliteCommand command = connection.CreateCommand();
-        command.CommandText = """
-            INSERT INTO _workspace_operations (id, operation_type, result_table_name, created_at, message, source_sql)
-            VALUES ($id, 'compare', NULL, $createdAt, $message, $sourceSql);
-            """;
-        command.Parameters.AddWithValue("$id", Guid.NewGuid().ToString());
-        command.Parameters.AddWithValue("$createdAt", DateTimeOffset.UtcNow.ToString("O"));
-        command.Parameters.AddWithValue("$message", message);
-        command.Parameters.AddWithValue("$sourceSql", sql);
-        await command.ExecuteNonQueryAsync(cancellationToken);
-    }
 }

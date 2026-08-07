@@ -64,7 +64,7 @@ public sealed class SqliteWorkspaceServiceTests
         Assert.Contains("_workspace_imports", tables);
         Assert.Contains("_workspace_columns", tables);
         Assert.Contains("_workspace_errors", tables);
-        Assert.Contains("_workspace_operations", tables);
+        Assert.DoesNotContain("_workspace_operations", tables);
     }
 
     [Fact]

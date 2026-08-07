@@ -1,7 +1,7 @@
 <Window x:Class="CSVForge.App.Wpf.SettingsWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        Title="Ustawienia" Width="560" Height="470"
+        Title="Ustawienia" Width="560" Height="680"
         WindowStartupLocation="CenterOwner" ResizeMode="NoResize"
         Background="#F5F7FB">
     <Grid Margin="20">
@@ -22,6 +22,19 @@
                 <TextBlock Text="Zmienne: {liczba_rekordów}, {data}, {godzina}, {minuta}"
                            Foreground="#667085" FontSize="11" />
                 <TextBlock x:Name="PreviewText" Margin="0,9,0,0" Foreground="#344054" />
+
+                <CheckBox x:Name="ShowPreparedImportsCheckBox"
+                          Content="Pokazuj pliki gotowe do importu w panelu tabel"
+                          Margin="0,18,0,0" />
+                <TextBlock Text="Wyłączenie ukrywa przygotowane pliki, ale nie zatrzymuje obserwowania folderów ani przygotowywania w tle."
+                           Margin="22,4,0,0" Foreground="#667085" FontSize="11" TextWrapping="Wrap" />
+
+                <Border Height="1" Background="#E4E7EC" Margin="0,18,0,16" />
+                <TextBlock Text="Import automatyczny" FontWeight="SemiBold" Margin="0,0,0,10" />
+                <Button Content="Konfiguruj obserwowane foldery…" HorizontalAlignment="Left"
+                        Padding="12,7" Click="ConfigureWatchedFolders_Click" />
+                <TextBlock x:Name="WatchedFoldersStatusText" Margin="0,6,0,0"
+                           Foreground="#667085" FontSize="11" />
 
                 <Border Height="1" Background="#E4E7EC" Margin="0,18,0,16" />
                 <TextBlock Text="Pomoc i diagnostyka" FontWeight="SemiBold" Margin="0,0,0,10" />

@@ -50,7 +50,16 @@
                         Width="38" Height="34" Padding="0"
                         ToolTip="Ustawienia" AutomationProperties.Name="Ustawienia"
                         Click="ShowSettings_Click">
-                    <TextBlock FontFamily="Segoe Fluent Icons" FontSize="17" Text="&#xE713;" />
+                    <Viewbox Width="18" Height="18" Stretch="Uniform">
+                        <Canvas Width="20" Height="20">
+                            <Path Stroke="White" StrokeThickness="2.2" StrokeStartLineCap="Round" StrokeEndLineCap="Round"
+                                  Data="M10,0.8 L10,4 M10,16 L10,19.2 M0.8,10 L4,10 M16,10 L19.2,10 M3.5,3.5 L5.8,5.8 M14.2,14.2 L16.5,16.5 M16.5,3.5 L14.2,5.8 M5.8,14.2 L3.5,16.5" />
+                            <Ellipse Canvas.Left="3.6" Canvas.Top="3.6" Width="12.8" Height="12.8"
+                                     Stroke="White" StrokeThickness="2.2" />
+                            <Ellipse Canvas.Left="7.5" Canvas.Top="7.5" Width="5" Height="5"
+                                     Stroke="White" StrokeThickness="2" />
+                        </Canvas>
+                    </Viewbox>
                 </Button>
             </Grid>
         </Border>
@@ -76,48 +85,21 @@
                                 <ColumnDefinition Width="*" />
                                 <ColumnDefinition Width="Auto" />
                                 <ColumnDefinition Width="Auto" />
-                                <ColumnDefinition Width="Auto" />
                             </Grid.ColumnDefinitions>
                             <StackPanel>
                                 <TextBlock Text="Pliki CSV" FontSize="16" FontWeight="SemiBold" />
                                 <TextBlock Text="Źródła danych workspace" Foreground="{StaticResource TextMutedBrush}" FontSize="11" Margin="0,2,0,0" />
                             </StackPanel>
-                            <Button Grid.Column="1" Width="30" Height="30" Margin="4,0,0,0" Padding="5"
-                                    ToolTip="Obserwowane foldery" AutomationProperties.Name="Konfiguruj obserwowane foldery"
-                                    Click="ConfigureWatchedFolders_Click">
-                                <Viewbox><Path Stroke="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}" Fill="Transparent" StrokeThickness="1.5" Data="M1,4 L6,4 L8,6 L15,6 L15,14 L1,14 Z M10,2 A3,3 0 1 1 9.99,2" /></Viewbox>
-                            </Button>
-                            <Button x:Name="CollapseFilesPanelButton" Grid.Column="2" Width="30" Height="30" Margin="4,0,0,0" Padding="6"
+                            <Button x:Name="CollapseFilesPanelButton" Grid.Column="1" Width="30" Height="30" Margin="4,0,0,0" Padding="6"
                                     ToolTip="Zwiń panel" AutomationProperties.Name="Zwiń panel plików"
                                     Click="SetFilesPanelCollapsed_Click">
                                 <Viewbox><Path Stroke="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}" StrokeThickness="1.6" StrokeStartLineCap="Round" StrokeEndLineCap="Round" StrokeLineJoin="Round" Data="M2,2 L14,2 L14,14 L2,14 Z M6,2 L6,14 M10,5 L7,8 L10,11" /></Viewbox>
                             </Button>
-                            <Button Grid.Column="3" Width="34" Height="34" Content="+" FontSize="19" FontWeight="SemiBold" Margin="6,0,0,0"
+                            <Button Grid.Column="2" Width="34" Height="34" Content="+" FontSize="19" FontWeight="SemiBold" Margin="6,0,0,0"
                                     Style="{StaticResource PrimaryButton}" Padding="0"
                                     ToolTip="Dodaj plik CSV" AutomationProperties.Name="Dodaj plik CSV"
                                     Click="ChooseCsv_Click" />
                         </Grid>
-
-                        <Expander DockPanel.Dock="Bottom" Header="Historia operacji" Margin="0,10,0,0" IsExpanded="False">
-                            <Border Background="{StaticResource SurfaceMutedBrush}" BorderBrush="{StaticResource BorderBrush}" BorderThickness="1" CornerRadius="6" Margin="0,6,0,0" Height="150">
-                                <ListBox x:Name="OperationsListBox" SelectionChanged="OperationsListBox_SelectionChanged"
-                                         PreviewMouseRightButtonDown="ListBox_PreviewMouseRightButtonDown"
-                                         PreviewKeyDown="DeletableListBox_PreviewKeyDown">
-                                    <ListBox.ContextMenu>
-                                        <ContextMenu>
-                                            <MenuItem Header="Eksportuj" Click="ExportTable_Click" />
-                                            <Separator />
-                                            <MenuItem Header="Usuń wynik" Click="DeleteOperation_Click" />
-                                        </ContextMenu>
-                                    </ListBox.ContextMenu>
-                                    <ListBox.ItemTemplate>
-                                        <DataTemplate>
-                                            <TextBlock Text="{Binding DisplayName}" TextTrimming="CharacterEllipsis" ToolTip="{Binding DisplayName}" />
-                                        </DataTemplate>
-                                    </ListBox.ItemTemplate>
-                                </ListBox>
-                            </Border>
-                        </Expander>
 
                         <ListBox x:Name="ImportsListBox" SelectionChanged="ImportsListBox_SelectionChanged"
                                  SelectionMode="Extended"
@@ -302,6 +284,7 @@
                                             <RowDefinition Height="Auto" />
                                             <RowDefinition Height="Auto" />
                                             <RowDefinition Height="Auto" />
+                                            <RowDefinition Height="Auto" />
                                         </Grid.RowDefinitions>
                                         <Grid.ColumnDefinitions>
                                             <ColumnDefinition Width="Auto" />
@@ -312,28 +295,48 @@
                                             <ColumnDefinition Width="110" />
                                             <ColumnDefinition Width="Auto" />
                                         </Grid.ColumnDefinitions>
-                                        <TextBlock Text="Klucze lewe" VerticalAlignment="Center" />
-                                        <ComboBox x:Name="JoinLeftKeyColumnsComboBox" Grid.Column="1" Height="30" Margin="10,0,18,6"
-                                                  IsEditable="True" SelectionChanged="JoinLeftKeyColumnsComboBox_SelectionChanged"
-                                                  ToolTip="Wybierz jedną kolumnę lub wpisz kilka nazw oddzielonych przecinkami" />
+                                        <TextBlock Text="Lewy plik" VerticalAlignment="Center" />
+                                        <ComboBox x:Name="JoinLeftTableComboBox" Grid.Column="1" Height="30" Margin="10,0,18,6"
+                                                  DisplayMemberPath="DisplayName" SelectionChanged="JoinLeftTableComboBox_SelectionChanged" />
                                         <TextBlock Grid.Column="2" Text="Prawy plik" VerticalAlignment="Center" />
                                         <ComboBox x:Name="JoinTableComboBox" Grid.Column="3" Grid.ColumnSpan="3" Height="30" Margin="10,0,18,6"
                                                   DisplayMemberPath="DisplayName" SelectionChanged="JoinTableComboBox_SelectionChanged" />
+                                        <StackPanel Grid.Column="6" Margin="0,0,0,6">
+                                            <TextBlock Text="Typ" Margin="0,0,0,3" />
+                                            <ComboBox x:Name="JoinTypeComboBox" Height="30" SelectedIndex="0"
+                                                      SelectionChanged="JoinTypeComboBox_SelectionChanged">
+                                                <ComboBoxItem Content="LEFT" Tag="Left" />
+                                                <ComboBoxItem Content="INNER" Tag="Inner" />
+                                                <ComboBoxItem Content="RIGHT" Tag="Right" />
+                                            </ComboBox>
+                                        </StackPanel>
 
-                                        <TextBlock Grid.Row="1" Text="Klucze prawe" VerticalAlignment="Center" />
-                                        <TextBox x:Name="JoinRightKeyColumnsTextBox" Grid.Row="1" Grid.Column="1" Grid.ColumnSpan="3" Height="30" Margin="10,0,18,0" VerticalContentAlignment="Center" />
-                                        <TextBlock Grid.Row="1" Grid.Column="4" Text="Typ" VerticalAlignment="Center" />
-                                        <ComboBox x:Name="JoinTypeComboBox" Grid.Row="1" Grid.Column="5" Height="30" Margin="10,0,18,0" SelectedIndex="0">
-                                            <ComboBoxItem Content="LEFT" Tag="Left" />
-                                            <ComboBoxItem Content="INNER" Tag="Inner" />
-                                            <ComboBoxItem Content="RIGHT" Tag="Right" />
-                                        </ComboBox>
+                                        <TextBlock Grid.Row="1" Text="Klucze lewe" VerticalAlignment="Center" />
+                                        <ComboBox x:Name="JoinLeftKeyColumnsComboBox" Grid.Row="1" Grid.Column="1" Height="30" Margin="10,0,18,0"
+                                                  IsEditable="True" SelectionChanged="JoinLeftKeyColumnsComboBox_SelectionChanged"
+                                                  ToolTip="Wybierz jedną kolumnę lub wpisz kilka nazw oddzielonych przecinkami" />
+                                        <TextBlock Grid.Row="1" Grid.Column="2" Text="Klucze prawe" VerticalAlignment="Center" />
+                                        <TextBox x:Name="JoinRightKeyColumnsTextBox" Grid.Row="1" Grid.Column="3" Grid.ColumnSpan="3" Height="30" Margin="10,0,18,0" VerticalContentAlignment="Center" />
                                         <Button Grid.Row="1" Grid.Column="6" Content="Połącz pliki" Style="{StaticResource PrimaryButton}" MinWidth="132" Click="JoinTables_Click" />
 
                                         <TextBlock Grid.Row="2" Text="Kolumny lewe" Margin="0,8,0,0" VerticalAlignment="Center" />
-                                        <TextBox x:Name="LeftOutputColumnsTextBox" Grid.Row="2" Grid.Column="1" Height="28" Margin="10,8,18,0" VerticalContentAlignment="Center" />
+                                        <DockPanel Grid.Row="2" Grid.Column="1" Margin="10,8,18,0">
+                                            <Button DockPanel.Dock="Right" Content="Wybierz…" MinWidth="76" Margin="6,0,0,0"
+                                                    Click="SelectLeftOutputColumns_Click" />
+                                            <TextBox x:Name="LeftOutputColumnsTextBox" Height="28" IsReadOnly="True"
+                                                     VerticalContentAlignment="Center" ToolTip="Wybrane kolumny lewego pliku" />
+                                        </DockPanel>
                                         <TextBlock Grid.Row="2" Grid.Column="2" Text="Kolumny prawe" Margin="0,8,0,0" VerticalAlignment="Center" />
-                                        <TextBox x:Name="RightOutputColumnsTextBox" Grid.Row="2" Grid.Column="3" Grid.ColumnSpan="3" Height="28" Margin="10,8,18,0" VerticalContentAlignment="Center" />
+                                        <DockPanel Grid.Row="2" Grid.Column="3" Grid.ColumnSpan="3" Margin="10,8,18,0">
+                                            <Button DockPanel.Dock="Right" Content="Wybierz…" MinWidth="76" Margin="6,0,0,0"
+                                                    Click="SelectRightOutputColumns_Click" />
+                                            <TextBox x:Name="RightOutputColumnsTextBox" Height="28" IsReadOnly="True"
+                                                     VerticalContentAlignment="Center" ToolTip="Wybrane kolumny prawego pliku" />
+                                        </DockPanel>
+                                        <Border Grid.Row="3" Grid.ColumnSpan="7" Margin="0,12,0,0" Padding="10,8"
+                                                Background="#EFF6FF" BorderBrush="#BFDBFE" BorderThickness="1" CornerRadius="6">
+                                            <TextBlock x:Name="JoinExplanationText" Foreground="#1E3A5F" TextWrapping="Wrap" />
+                                        </Border>
                                     </Grid>
                                 </TabItem>
 
@@ -393,7 +396,7 @@
                                   AutomationProperties.HelpText="Zaznacz jedną lub wiele komórek i naciśnij Control+C, aby skopiować ich wartości.">
                             <DataGrid.ContextMenu>
                                 <ContextMenu>
-                                    <MenuItem Header="Kopiuj zaznaczone komórki"
+                                    <MenuItem Header="Kopiuj zaznaczenie"
                                               InputGestureText="Ctrl+C"
                                               Click="CopySelectedCell_Click" />
                                 </ContextMenu>

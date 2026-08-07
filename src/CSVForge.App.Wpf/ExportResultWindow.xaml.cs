@@ -5,7 +5,10 @@ namespace CSVForge.App.Wpf;
 
 public partial class ExportResultWindow : Window
 {
-    public ExportResultWindow(IEnumerable<string> columns, string suggestedTableName)
+    public ExportResultWindow(
+        IEnumerable<string> columns,
+        string suggestedTableName,
+        IReadOnlySet<string>? initiallySelectedColumns = null)
     {
         InitializeComponent();
         TableNameTextBox.Text = suggestedTableName;
@@ -14,7 +17,8 @@ public partial class ExportResultWindow : Window
             ColumnsPanel.Children.Add(new CheckBox
             {
                 Content = column,
-                IsChecked = true,
+                IsChecked = initiallySelectedColumns is not { Count: > 0 }
+                    || initiallySelectedColumns.Contains(column),
                 Margin = new Thickness(6, 5, 6, 5)
             });
         }
